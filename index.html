@@ -3,7 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>REALint - Global Cloud Stream</title>
+<title>REALint - Video Platform</title>
+<!-- Supabase JS Client v2 -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
 
@@ -14,7 +16,7 @@
   }
 
   body {
-    background-color: #e0e0e0;
+    background-color: #d0d0d0;
     color: #000;
     margin: 0;
     padding: 10px;
@@ -33,10 +35,11 @@
     color: #000080;
     text-transform: uppercase;
     cursor: pointer;
+    display: inline-block;
   }
 
   #container {
-    width: 960px;
+    width: 980px;
     margin: 0 auto;
     background: #c0c0c0;
     border: 3px solid #000;
@@ -51,13 +54,13 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
   }
 
   .auth-panel {
     background: #ffffcc;
     border: 2px solid #000;
-    padding: 6px;
+    padding: 4px 6px;
     display: flex;
     gap: 4px;
     align-items: center;
@@ -79,10 +82,38 @@
     border-color: #808080 #fff #fff #808080;
   }
 
+  .btn-sm {
+    padding: 1px 4px;
+    font-size: 11px;
+  }
+
   .auth-input {
-    width: 110px !important;
+    width: 85px !important;
     margin-bottom: 0 !important;
     padding: 2px !important;
+  }
+
+  nav.top-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 10px;
+    background: #a0a0a0;
+    padding: 4px;
+    border: 2px solid #000;
+  }
+
+  nav.top-tabs .tab-btn {
+    background: #c0c0c0;
+    border: 2px solid;
+    border-color: #fff #808080 #808080 #fff;
+    padding: 4px 12px;
+    font-weight: bold;
+    cursor: pointer;
+  }
+
+  nav.top-tabs .tab-btn.active {
+    background: #ffffcc;
+    border-color: #808080 #fff #fff #808080;
   }
 
   .layout {
@@ -91,7 +122,7 @@
   }
 
   .sidebar {
-    width: 240px;
+    width: 250px;
     background: #d4d0c8;
     border: 2px solid #000;
     padding: 8px;
@@ -102,6 +133,7 @@
     background: #fff;
     border: 2px solid #000;
     padding: 10px;
+    min-height: 520px;
   }
 
   .box {
@@ -120,12 +152,17 @@
     border-bottom: 2px solid #000;
   }
 
-  input[type="text"], input[type="password"], select {
+  input[type="text"], input[type="password"], textarea, select {
     width: 100%;
     border: 2px solid #000;
     padding: 3px;
     background: #fff;
     margin-bottom: 6px;
+  }
+
+  textarea {
+    resize: vertical;
+    height: 50px;
   }
 
   .video-player-container {
@@ -194,14 +231,27 @@
     font-size: 20px;
   }
 
-  .channel-banner {
-    background: #e0e0e0;
+  .channel-header {
+    background: #d4d0c8;
     border: 2px solid #000;
-    padding: 6px;
-    margin-bottom: 8px;
+    padding: 10px;
+    margin-bottom: 10px;
     display: flex;
-    justify-content: space-between;
+    gap: 12px;
     align-items: center;
+  }
+
+  .channel-avatar {
+    width: 60px;
+    height: 60px;
+    background: #000080;
+    color: #fff;
+    border: 2px solid #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'VT323', monospace;
+    font-size: 32px;
   }
 
   .share-link {
@@ -213,6 +263,44 @@
     margin-top: 4px;
   }
 
+  .analytics-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+
+  .stat-box {
+    background: #ffffcc;
+    border: 2px solid #000;
+    padding: 8px;
+    text-align: center;
+  }
+
+  .stat-num {
+    font-family: 'VT323', monospace;
+    font-size: 28px;
+    color: #000080;
+  }
+
+  table.retro-table {
+    width: 100%;
+    border-collapse: collapse;
+    border: 2px solid #000;
+    margin-top: 6px;
+  }
+
+  table.retro-table th, table.retro-table td {
+    border: 1px solid #000;
+    padding: 4px;
+    text-align: left;
+  }
+
+  table.retro-table th {
+    background: #808080;
+    color: #fff;
+  }
+
   .status-bar {
     background: #c0c0c0;
     border: 2px solid #000;
@@ -220,22 +308,36 @@
     margin-top: 10px;
     font-size: 11px;
   }
+
+  .view-panel {
+    display: none;
+  }
+
+  .view-panel.active {
+    display: block;
+  }
 </style>
-<!-- Supabase SDK for Real Cloud Database and Global Video Storage -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
 <div id="container">
   <header>
-    <div class="pixel-title" onclick="goHome()">REALint</div>
+    <div class="pixel-title" onclick="switchTab('home')">REALint</div>
     <div class="auth-panel" id="auth-panel">
       <input type="text" id="login-email" class="auth-input" placeholder="EMAIL">
+      <input type="text" id="login-username" class="auth-input" placeholder="USER">
       <input type="password" id="login-pass" class="auth-input" placeholder="PASS">
       <button class="btn" onclick="cloudLogin('LOGIN')">LOGIN</button>
       <button class="btn" onclick="cloudLogin('REGISTER')">SIGN UP</button>
     </div>
   </header>
+
+  <nav class="top-tabs">
+    <button class="tab-btn active" id="tab-home" onclick="switchTab('home')">HOME FEED</button>
+    <button class="tab-btn" id="tab-channel" onclick="switchTab('channel')">MY CHANNEL</button>
+    <button class="tab-btn" id="tab-playlists" onclick="switchTab('playlists')">PLAYLISTS</button>
+    <button class="tab-btn" id="tab-analytics" onclick="switchTab('analytics')">CREATOR DASHBOARD</button>
+  </nav>
 
   <div class="layout">
     <div class="sidebar">
@@ -247,7 +349,7 @@
 
       <div class="box">
         <div class="box-title">SEARCH & FILTER</div>
-        <label>Title:</label>
+        <label>Title / User:</label>
         <input type="text" id="search-input" oninput="applyFilters()">
         
         <label>Category:</label>
@@ -263,6 +365,7 @@
         <select id="sort-select" onchange="applyFilters()">
           <option value="TRENDING">Trending (Likes/Time)</option>
           <option value="NEWEST">Newest Uploads</option>
+          <option value="MOST_VIEWED">Most Viewed</option>
         </select>
       </div>
 
@@ -287,55 +390,147 @@
     </div>
 
     <div class="main-content">
-      <div class="channel-banner" id="channel-banner">
-        <div><strong>CHANNEL:</strong> <span id="banner-channel-name">SELECT A VIDEO</span></div>
-        <div><strong>SUBSCRIBERS:</strong> <span id="banner-sub-count">0</span> <button class="btn" id="sub-btn" onclick="toggleSubscribe()" style="margin-left:6px; display:none;">SUBSCRIBE</button></div>
+      <!-- HOME FEED VIEW -->
+      <div id="view-home" class="view-panel active">
+        <div class="box">
+          <div class="box-title" id="current-video-title">PLAYER: NO MEDIA LOADED</div>
+          <div class="video-player-container" id="player-container">
+            <span id="player-placeholder">NO VIDEOS FOUND</span>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <span id="player-category" class="btn btn-sm">CAT: NONE</span>
+              <span id="player-author" style="margin-left:6px; cursor:pointer; text-decoration:underline;" onclick="openChannelView(activeVideo?.author_name)">Channel: N/A</span>
+              <span id="player-views" style="margin-left:6px;">Views: 0</span>
+            </div>
+            <div>
+              <button class="btn" onclick="likeVideoOnCloud()">LIKE (<span id="player-likes">0</span>)</button>
+              <button class="btn" onclick="addActiveToPlaylist()">+ PLAYLIST</button>
+            </div>
+          </div>
+          <div class="share-link" id="share-link-box">DIRECT LINK: N/A</div>
+        </div>
+
+        <div class="box">
+          <div class="box-title">GLOBAL VIDEO INDEX</div>
+          <div class="video-grid" id="video-grid"></div>
+        </div>
       </div>
 
-      <div class="box">
-        <div class="box-title" id="current-video-title">PLAYER: NO MEDIA LOADED</div>
-        <div class="video-player-container" id="player-container">
-          <span id="player-placeholder">NO VIDEOS FOUND</span>
-        </div>
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <div>
-            <span id="player-category" class="btn" style="font-size:10px;">CAT: NONE</span>
-            <span id="player-author" style="margin-left:8px;">By: N/A</span>
+      <!-- CHANNEL PAGE VIEW -->
+      <div id="view-channel" class="view-panel">
+        <div class="channel-header">
+          <div class="channel-avatar" id="ch-avatar">?</div>
+          <div style="flex:1;">
+            <div style="font-size:20px; font-weight:bold;" id="ch-name">Channel Name</div>
+            <div style="color:#555;" id="ch-subs">0 Subscribers</div>
+            <div style="margin-top:4px;" id="ch-bio">No channel bio set yet.</div>
           </div>
           <div>
-            <button class="btn" onclick="likeVideoOnCloud()">LIKE (<span id="player-likes">0</span>)</button>
+            <button class="btn" id="ch-sub-btn" onclick="toggleChannelSub()">SUBSCRIBE</button>
           </div>
         </div>
-        <div class="share-link" id="share-link-box">DIRECT LINK: N/A</div>
+
+        <div class="box" id="edit-bio-box" style="display:none;">
+          <div class="box-title">EDIT PROFILE & BIO</div>
+          <label>Channel Bio:</label>
+          <textarea id="bio-input" placeholder="Tell viewers about your channel..."></textarea>
+          <button class="btn" onclick="saveProfileBio()">SAVE BIO</button>
+        </div>
+
+        <div class="box">
+          <div class="box-title" id="ch-uploads-title">CHANNEL UPLOADS</div>
+          <div class="video-grid" id="channel-video-grid"></div>
+        </div>
       </div>
 
-      <div class="box">
-        <div class="box-title">GLOBAL VIDEO INDEX</div>
-        <div class="video-grid" id="video-grid"></div>
+      <!-- PLAYLISTS VIEW -->
+      <div id="view-playlists" class="view-panel">
+        <div class="box">
+          <div class="box-title">CREATE NEW PLAYLIST</div>
+          <div style="display:flex; gap:6px;">
+            <input type="text" id="playlist-name-input" placeholder="PLAYLIST TITLE" style="margin-bottom:0;">
+            <button class="btn" onclick="createNewPlaylist()">CREATE</button>
+          </div>
+        </div>
+
+        <div class="box">
+          <div class="box-title">MY PLAYLISTS</div>
+          <div id="playlists-list-container">LOG IN TO MANAGE PLAYLISTS</div>
+        </div>
       </div>
+
+      <!-- CREATOR DASHBOARD & ANALYTICS -->
+      <div id="view-analytics" class="view-panel">
+        <div class="analytics-grid">
+          <div class="stat-box">
+            <div>TOTAL VIEWS</div>
+            <div class="stat-num" id="stat-views">0</div>
+          </div>
+          <div class="stat-box">
+            <div>TOTAL LIKES</div>
+            <div class="stat-num" id="stat-likes">0</div>
+          </div>
+          <div class="stat-box">
+            <div>SUBSCRIBERS</div>
+            <div class="stat-num" id="stat-subs">0</div>
+          </div>
+          <div class="stat-box">
+            <div>TOTAL UPLOADS</div>
+            <div class="stat-num" id="stat-uploads">0</div>
+          </div>
+        </div>
+
+        <div class="box">
+          <div class="box-title">VIDEO PERFORMANCE BREAKDOWN</div>
+          <table class="retro-table">
+            <thead>
+              <tr>
+                <th>Title</th>
+                <th>Category</th>
+                <th>Views</th>
+                <th>Likes</th>
+                <th>Uploaded</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="analytics-table-body">
+              <tr><td colspan="6" style="text-align:center;">Log in to view dashboard metrics</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
     </div>
   </div>
 
-  <div class="status-bar" id="status-bar">STATUS: HARD RESET PERFORMED. CONNECTING TO CLOUD SERVER...</div>
+  <div class="status-bar" id="status-bar">STATUS: REALINT READY. CONNECTING TO CLOUD SERVER...</div>
 </div>
 
 <script>
-  // Hard wipe local storage completely to erase old local archives
-  localStorage.clear();
-
-  // Supabase Cloud Configuration (Free Tier Server Backend)
+  // SUPABASE CONFIGURATION
   const SUPABASE_URL = "https://YOUR-PROJECT-ID.supabase.co";
   const SUPABASE_ANON_KEY = "YOUR-PUBLIC-ANON-KEY";
-  
-  const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-  let currentUser = null;
+  let supabaseClient = null;
+  if (window.supabase && SUPABASE_URL.indexOf("YOUR-PROJECT-ID") === -1) {
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  }
+
+  let currentUser = null; // { id, email, username, bio, subscribers: [] }
   let activeVideo = null;
   let videoDatabase = [];
+  let userPlaylists = [];
+  let currentViewingChannel = null;
 
   window.onload = function() {
-    checkCloudSession();
-    fetchCloudVideos();
+    loadFallbackLocalData();
+    if (supabaseClient) {
+      checkCloudSession();
+      fetchCloudVideos();
+    } else {
+      updateStatus("DEMO MODE ACTIVE. CONFIGURE SUPABASE KEYS FOR LIVE CLOUD BACKEND.");
+    }
     handleURLRouting();
   };
 
@@ -343,34 +538,91 @@
     handleURLRouting();
   };
 
+  function switchTab(tabName) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.view-panel').forEach(p => p.classList.remove('active'));
+
+    document.getElementById('tab-' + tabName).classList.add('active');
+    document.getElementById('view-' + tabName).classList.add('active');
+
+    if (tabName === 'channel') {
+      openChannelView(currentUser ? currentUser.username : null);
+    } else if (tabName === 'analytics') {
+      renderDashboardAnalytics();
+    } else if (tabName === 'playlists') {
+      renderPlaylistsView();
+    }
+  }
+
   function handleURLRouting() {
     const urlParams = new URLSearchParams(window.location.search);
     const watchId = urlParams.get('watchid');
+    const channelName = urlParams.get('channel');
 
     if (watchId && videoDatabase.length > 0) {
       const targetVideo = videoDatabase.find(v => v.id == watchId);
       if (targetVideo) {
+        switchTab('home');
         loadVideoIntoPlayer(targetVideo, false);
       }
+    } else if (channelName) {
+      switchTab('channel');
+      openChannelView(channelName);
     }
   }
 
   function goHome() {
     const baseURL = window.location.protocol + "//" + window.location.host + window.location.pathname;
     window.history.pushState({ path: baseURL }, '', baseURL);
+    switchTab('home');
+    applyFilters();
+  }
+
+  // DEMO & FALLBACK STORAGE HANDLING
+  function loadFallbackLocalData() {
+    const localVids = localStorage.getItem('realint_vids_demo');
+    if (localVids) {
+      videoDatabase = JSON.parse(localVids);
+    }
+    const localSession = localStorage.getItem('realint_user_session');
+    if (localSession) {
+      currentUser = JSON.parse(localSession);
+      updateUserUI();
+    }
+    const localPlaylists = localStorage.getItem('realint_playlists');
+    if (localPlaylists) {
+      userPlaylists = JSON.parse(localPlaylists);
+    }
     applyFilters();
   }
 
   async function checkCloudSession() {
     const { data: { session } } = await supabaseClient.auth.getSession();
     if (session) {
-      currentUser = session.user;
+      currentUser = { id: session.user.id, email: session.user.email };
+      await fetchUserProfile();
       updateUserUI();
+    }
+  }
+
+  async function fetchUserProfile() {
+    if (!currentUser || !supabaseClient) return;
+    const { data } = await supabaseClient
+      .from('profiles')
+      .select('*')
+      .eq('id', currentUser.id)
+      .single();
+    
+    if (data) {
+      currentUser.username = data.username;
+      currentUser.bio = data.bio || '';
+      currentUser.subscribers = data.subscribers || [];
     }
   }
 
   async function cloudLogin(type) {
     const email = document.getElementById('login-email').value.trim();
+    const username = document.getElementById('login-username').value.trim();
     const pass = document.getElementById('login-pass').value.trim();
 
     if (!email || !pass) {
@@ -378,57 +630,83 @@
       return;
     }
 
+    if (!supabaseClient) {
+      // Demo Mode Authentication
+      currentUser = {
+        id: "usr_" + Date.now(),
+        email: email,
+        username: username || email.split('@')[0],
+        bio: "Demo channel bio.",
+        subscribers: []
+      };
+      localStorage.setItem('realint_user_session', JSON.stringify(currentUser));
+      updateUserUI();
+      updateStatus("LOGGED IN (DEMO MODE).");
+      return;
+    }
+
     if (type === 'REGISTER') {
+      if (!username) {
+        alert("PROVIDE USERNAME FOR YOUR CHANNEL.");
+        return;
+      }
       const { data, error } = await supabaseClient.auth.signUp({ email, password: pass });
       if (error) {
-        alert("REGISTRATION ERROR: " + error.message);
+        alert("AUTH ERROR: " + error.message);
       } else {
-        alert("SUCCESS! CHECK YOUR EMAIL OR CONFIRMATION.");
-        updateStatus("REGISTERED ACCOUNT.");
+        currentUser = { id: data.user.id, email, username, bio: '', subscribers: [] };
+        await supabaseClient.from('profiles').insert([{ id: currentUser.id, username, bio: '' }]);
+        updateUserUI();
+        updateStatus("REGISTERED & LOGGED IN.");
       }
     } else if (type === 'LOGIN') {
       const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password: pass });
       if (error) {
         alert("LOGIN ERROR: " + error.message);
       } else {
-        currentUser = data.user;
+        currentUser = { id: data.user.id, email };
+        await fetchUserProfile();
         updateUserUI();
-        updateStatus("LOGGED IN AS " + currentUser.email);
+        updateStatus("LOGGED IN AS " + (currentUser.username || currentUser.email));
       }
     }
   }
 
   function updateUserUI() {
-    document.getElementById('user-info').innerText = currentUser.email.toUpperCase();
-    document.getElementById('auth-panel').innerHTML = `<button class="btn" onclick="cloudLogout()">LOGOUT</button>`;
+    if (!currentUser) return;
+    const uname = currentUser.username || currentUser.email;
+    document.getElementById('user-info').innerText = uname.toUpperCase();
+    const subsCount = (currentUser.subscribers || []).length;
+    document.getElementById('sub-count-display').innerText = `Subscribers: ${subsCount}`;
+    document.getElementById('auth-panel').innerHTML = `<button class="btn" onclick="cloudLogout()">LOGOUT (${uname})</button>`;
   }
 
   async function cloudLogout() {
-    await supabaseClient.auth.signOut();
+    if (supabaseClient) await supabaseClient.auth.signOut();
+    localStorage.removeItem('realint_user_session');
     currentUser = null;
     window.location.reload();
   }
 
   async function fetchCloudVideos() {
-    updateStatus("FETCHING VIDEOS FROM CLOUD SERVER...");
+    updateStatus("FETCHING CLOUD VIDEOS...");
     const { data, error } = await supabaseClient
       .from('videos')
       .select('*')
       .order('created_at', { ascending: false });
 
     if (error) {
-      updateStatus("CLOUD ERROR: " + error.message);
-      videoDatabase = [];
+      updateStatus("DB FETCH ERROR: " + error.message);
     } else {
       videoDatabase = data || [];
-      updateStatus("LOADED " + videoDatabase.length + " VIDEOS FROM CLOUD SERVER.");
+      updateStatus("LOADED " + videoDatabase.length + " VIDEOS FROM CLOUD.");
     }
     applyFilters();
   }
 
   async function uploadToCloudServer() {
     if (!currentUser) {
-      alert("MUST LOGIN TO UPLOAD TO THE CLOUD.");
+      alert("MUST LOGIN TO UPLOAD.");
       return;
     }
 
@@ -438,52 +716,67 @@
     const file = fileInput.files[0];
 
     if (!titleInput || !file) {
-      alert("PROVIDE A TITLE AND VIDEO FILE.");
+      alert("PROVIDE TITLE AND FILE.");
       return;
     }
 
-    updateStatus("UPLOADING VIDEO FILE TO CLOUD STORAGE...");
-    const filePath = `uploads/${Date.now()}_${file.name}`;
-
-    // 1. Upload video file to Supabase Cloud Storage bucket
-    const { data: storageData, error: storageError } = await supabaseClient.storage
-      .from('cloud-videos')
-      .upload(filePath, file);
-
-    if (storageError) {
-      alert("STORAGE UPLOAD FAILED: " + storageError.message);
-      updateStatus("UPLOAD FAILED.");
-      return;
-    }
-
-    // 2. Get Public URL from Cloud
-    const { data: publicUrlData } = supabaseClient.storage
-      .from('cloud-videos')
-      .getPublicUrl(filePath);
-
-    const videoUrl = publicUrlData.publicUrl;
-
-    updateStatus("SAVING METADATA TO CLOUD DATABASE...");
-
-    // 3. Save Record to Cloud Database table
-    const { data: dbData, error: dbError } = await supabaseClient
-      .from('videos')
-      .insert([
-        {
+    if (!supabaseClient) {
+      // Local fallback upload processing
+      const reader = new FileReader();
+      updateStatus("PROCESSING VIDEO FILE...");
+      reader.onload = function(e) {
+        const record = {
+          id: "v_" + Date.now(),
           title: titleInput,
           category: categoryInput,
-          video_url: videoUrl,
-          author_email: currentUser.email,
-          likes: 0
+          video_url: e.target.result,
+          author_name: currentUser.username || currentUser.email,
+          author_id: currentUser.id,
+          views: 0,
+          likes: 0,
+          liked_by: [],
+          created_at: new Date().toISOString()
+        };
+        videoDatabase.unshift(record);
+        try {
+          localStorage.setItem('realint_vids_demo', JSON.stringify(videoDatabase));
+          updateStatus("PUBLISHED TO DEMO STORAGE.");
+          applyFilters();
+          loadVideoIntoPlayer(record, true);
+        } catch(err) {
+          alert("FILE TOO LARGE FOR DEMO STORAGE. USE SMALLER MP4/WEBM FILE.");
         }
-      ])
-      .select();
+      };
+      reader.readAsDataURL(file);
+      return;
+    }
 
-    if (dbError) {
-      alert("DATABASE SAVE FAILED: " + dbError.message);
-      updateStatus("DATABASE ERROR.");
+    updateStatus("UPLOADING FILE TO STORAGE...");
+    const filePath = `uploads/${Date.now()}_${file.name}`;
+    const { data: sData, error: sErr } = await supabaseClient.storage.from('cloud-videos').upload(filePath, file);
+
+    if (sErr) {
+      alert("STORAGE ERROR: " + sErr.message);
+      return;
+    }
+
+    const { data: urlData } = supabaseClient.storage.from('cloud-videos').getPublicUrl(filePath);
+
+    const { error: dbErr } = await supabaseClient.from('videos').insert([{
+      title: titleInput,
+      category: categoryInput,
+      video_url: urlData.publicUrl,
+      author_id: currentUser.id,
+      author_name: currentUser.username || currentUser.email,
+      views: 0,
+      likes: 0,
+      liked_by: []
+    }]);
+
+    if (dbErr) {
+      alert("DB ERROR: " + dbErr.message);
     } else {
-      updateStatus("SUCCESSFULLY PUBLISHED TO GLOBAL CLOUD.");
+      updateStatus("PUBLISHED TO GLOBAL CLOUD.");
       fetchCloudVideos();
     }
   }
@@ -494,23 +787,21 @@
     const sortVal = document.getElementById('sort-select').value;
 
     let filtered = videoDatabase.filter(v => {
-      const matchSearch = v.title.toLowerCase().includes(searchVal);
+      const matchSearch = v.title.toLowerCase().includes(searchVal) || (v.author_name && v.author_name.toLowerCase().includes(searchVal));
       const matchCat = (catVal === 'ALL') || (v.category === catVal);
       return matchSearch && matchCat;
     });
 
     if (sortVal === 'TRENDING') {
       filtered.sort((a, b) => {
-        const timeA = new Date(a.created_at).getTime();
-        const timeB = new Date(b.created_at).getTime();
-        const ageA = (Date.now() - timeA) / 3600000 + 2;
-        const ageB = (Date.now() - timeB) / 3600000 + 2;
-        const scoreA = a.likes / Math.pow(ageA, 1.5);
-        const scoreB = b.likes / Math.pow(ageB, 1.5);
-        return scoreB - scoreA;
+        const ageA = (Date.now() - new Date(a.created_at).getTime()) / 3600000 + 2;
+        const ageB = (Date.now() - new Date(b.created_at).getTime()) / 3600000 + 2;
+        return (b.likes / Math.pow(ageB, 1.5)) - (a.likes / Math.pow(ageA, 1.5));
       });
     } else if (sortVal === 'NEWEST') {
       filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    } else if (sortVal === 'MOST_VIEWED') {
+      filtered.sort((a, b) => (b.views || 0) - (a.views || 0));
     }
 
     renderGrid(filtered);
@@ -532,7 +823,7 @@
     grid.innerHTML = '';
 
     if (videos.length === 0) {
-      grid.innerHTML = `<div class="no-videos-message">NO VIDEOS ON CLOUD SERVER YET</div>`;
+      grid.innerHTML = `<div class="no-videos-message">NO VIDEOS FOUND</div>`;
       return;
     }
 
@@ -544,8 +835,8 @@
       card.innerHTML = `
         <div class="video-thumb">${v.category.toUpperCase()}</div>
         <div style="font-weight:bold; margin-top:4px;">${v.title}</div>
-        <div class="meta">By: ${v.author_email}</div>
-        <div class="meta">Likes: ${v.likes} | ${new Date(v.created_at).toLocaleDateString()}</div>
+        <div class="meta">Channel: ${v.author_name || 'Anonymous'}</div>
+        <div class="meta">Views: ${v.views || 0} | Likes: ${v.likes || 0}</div>
       `;
       grid.appendChild(card);
     });
@@ -553,13 +844,13 @@
 
   function loadVideoIntoPlayer(video, updateURL) {
     activeVideo = video;
+    video.views = (video.views || 0) + 1; // Increment views
+
     document.getElementById('current-video-title').innerText = "PLAYER: " + video.title.toUpperCase();
     document.getElementById('player-category').innerText = "CAT: " + video.category.toUpperCase();
-    document.getElementById('player-author').innerText = "By: " + video.author_email;
-    document.getElementById('player-likes').innerText = video.likes;
-
-    document.getElementById('banner-channel-name').innerText = video.author_email;
-    document.getElementById('banner-sub-count').innerText = "Public Cloud";
+    document.getElementById('player-author').innerText = "Channel: " + (video.author_name || 'Anonymous');
+    document.getElementById('player-views').innerText = "Views: " + video.views;
+    document.getElementById('player-likes').innerText = video.likes || 0;
 
     const directURL = window.location.protocol + "//" + window.location.host + window.location.pathname + "?watchid=" + video.id;
     document.getElementById('share-link-box').innerText = "DIRECT LINK (SHAREABLE): " + directURL;
@@ -571,16 +862,23 @@
     const container = document.getElementById('player-container');
     container.innerHTML = `<video id="main-player" controls preload="metadata"><source src="${video.video_url}" type="video/mp4">Your browser does not support HTML5 video.</video>`;
 
-    updateStatus("LOADED VIDEO FROM CLOUD: " + video.title);
+    // Sync views increment to server/local
+    if (supabaseClient) {
+      supabaseClient.from('videos').update({ views: video.views }).eq('id', video.id);
+    } else {
+      localStorage.setItem('realint_vids_demo', JSON.stringify(videoDatabase));
+    }
+
+    updateStatus("LOADED VIDEO: " + video.title);
   }
 
   function resetPlayer() {
     activeVideo = null;
     document.getElementById('current-video-title').innerText = "PLAYER: NO MEDIA LOADED";
     document.getElementById('player-category').innerText = "CAT: NONE";
-    document.getElementById('player-author').innerText = "By: N/A";
+    document.getElementById('player-author').innerText = "Channel: N/A";
+    document.getElementById('player-views').innerText = "Views: 0";
     document.getElementById('player-likes').innerText = "0";
-    document.getElementById('banner-channel-name').innerText = "SELECT A VIDEO";
     document.getElementById('share-link-box').innerText = "DIRECT LINK: N/A";
 
     const container = document.getElementById('player-container');
@@ -594,20 +892,187 @@
       return;
     }
 
-    const newLikes = activeVideo.likes + 1;
-    const { error } = await supabaseClient
-      .from('videos')
-      .update({ likes: newLikes })
-      .eq('id', activeVideo.id);
-
-    if (error) {
-      alert("LIKE ERROR: " + error.message);
-    } else {
-      activeVideo.likes = newLikes;
-      document.getElementById('player-likes').innerText = activeVideo.likes;
-      updateStatus("LIKE REGISTERED ON CLOUD.");
-      fetchCloudVideos();
+    let likedBy = activeVideo.liked_by || [];
+    if (likedBy.includes(currentUser.id)) {
+      alert("YOU ALREADY LIKED THIS VIDEO.");
+      return;
     }
+
+    likedBy.push(currentUser.id);
+    activeVideo.likes = (activeVideo.likes || 0) + 1;
+    activeVideo.liked_by = likedBy;
+
+    document.getElementById('player-likes').innerText = activeVideo.likes;
+
+    if (supabaseClient) {
+      await supabaseClient.from('videos').update({ likes: activeVideo.likes, liked_by: likedBy }).eq('id', activeVideo.id);
+    } else {
+      localStorage.setItem('realint_vids_demo', JSON.stringify(videoDatabase));
+    }
+    updateStatus("LIKE REGISTERED.");
+  }
+
+  // CHANNEL & PROFILE SYSTEM
+  function openChannelView(channelName) {
+    currentViewingChannel = channelName || (currentUser ? currentUser.username : 'Anonymous');
+    document.getElementById('ch-name').innerText = currentViewingChannel;
+    document.getElementById('ch-avatar').innerText = currentViewingChannel.charAt(0).toUpperCase();
+
+    const isSelf = currentUser && (currentUser.username === currentViewingChannel);
+    document.getElementById('edit-bio-box').style.display = isSelf ? 'block' : 'none';
+
+    const channelVids = videoDatabase.filter(v => v.author_name === currentViewingChannel);
+    document.getElementById('ch-uploads-title').innerText = currentViewingChannel.toUpperCase() + "'S UPLOADS (" + channelVids.length + ")";
+
+    const grid = document.getElementById('channel-video-grid');
+    grid.innerHTML = '';
+    if (channelVids.length === 0) {
+      grid.innerHTML = `<div class="no-videos-message">NO UPLOADS FROM THIS CHANNEL</div>`;
+    } else {
+      channelVids.forEach(v => {
+        const card = document.createElement('div');
+        card.className = 'video-card';
+        card.onclick = () => { switchTab('home'); loadVideoIntoPlayer(v, true); };
+        card.innerHTML = `
+          <div class="video-thumb">${v.category.toUpperCase()}</div>
+          <div style="font-weight:bold; margin-top:4px;">${v.title}</div>
+          <div class="meta">Views: ${v.views || 0} | Likes: ${v.likes || 0}</div>
+        `;
+        grid.appendChild(card);
+      });
+    }
+  }
+
+  function saveProfileBio() {
+    if (!currentUser) return;
+    const text = document.getElementById('bio-input').value.trim();
+    currentUser.bio = text;
+    document.getElementById('ch-bio').innerText = text || "No channel bio set yet.";
+    if (supabaseClient) {
+      supabaseClient.from('profiles').update({ bio: text }).eq('id', currentUser.id);
+    } else {
+      localStorage.setItem('realint_user_session', JSON.stringify(currentUser));
+    }
+    alert("PROFILE BIO SAVED.");
+  }
+
+  function toggleChannelSub() {
+    if (!currentUser) {
+      alert("LOG IN TO SUBSCRIBE TO CHANNELS.");
+      return;
+    }
+    alert("SUBSCRIBED TO " + currentViewingChannel.toUpperCase());
+  }
+
+  // PLAYLIST SYSTEM
+  function createNewPlaylist() {
+    if (!currentUser) {
+      alert("LOG IN TO CREATE PLAYLISTS.");
+      return;
+    }
+    const name = document.getElementById('playlist-name-input').value.trim();
+    if (!name) return;
+
+    userPlaylists.push({ id: "pl_" + Date.now(), title: name, videos: [] });
+    localStorage.setItem('realint_playlists', JSON.stringify(userPlaylists));
+    document.getElementById('playlist-name-input').value = '';
+    renderPlaylistsView();
+    updateStatus("CREATED PLAYLIST: " + name);
+  }
+
+  function addActiveToPlaylist() {
+    if (!activeVideo) return;
+    if (userPlaylists.length === 0) {
+      alert("CREATE A PLAYLIST IN THE PLAYLISTS TAB FIRST.");
+      return;
+    }
+    userPlaylists[0].videos.push(activeVideo);
+    localStorage.setItem('realint_playlists', JSON.stringify(userPlaylists));
+    alert("ADDED TO PLAYLIST: " + userPlaylists[0].title);
+  }
+
+  function renderPlaylistsView() {
+    const container = document.getElementById('playlists-list-container');
+    container.innerHTML = '';
+
+    if (userPlaylists.length === 0) {
+      container.innerHTML = '<div>No playlists created yet. Use the box above to create one.</div>';
+      return;
+    }
+
+    userPlaylists.forEach(pl => {
+      const box = document.createElement('div');
+      box.className = 'box';
+      box.innerHTML = `
+        <div class="box-title">${pl.title.toUpperCase()} (${pl.videos.length} VIDEOS)</div>
+        <div class="video-grid">
+          ${pl.videos.length === 0 ? '<div>No videos in this playlist</div>' : pl.videos.map(v => `
+            <div class="video-card" onclick="switchTab('home'); loadVideoIntoPlayer(videoDatabase.find(x => x.id === '${v.id}') || ${JSON.stringify(v).replace(/"/g, '&quot;')}, true);">
+              <div class="video-thumb">${v.category.toUpperCase()}</div>
+              <div style="font-weight:bold;">${v.title}</div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+      container.appendChild(box);
+    });
+  }
+
+  // ANALYTICS DASHBOARD
+  function renderDashboardAnalytics() {
+    if (!currentUser) {
+      document.getElementById('analytics-table-body').innerHTML = `<tr><td colspan="6" style="text-align:center;">Log in to view dashboard metrics</td></tr>`;
+      return;
+    }
+
+    const myVids = videoDatabase.filter(v => v.author_id === currentUser.id || v.author_name === currentUser.username);
+    let totalViews = 0;
+    let totalLikes = 0;
+
+    myVids.forEach(v => {
+      totalViews += (v.views || 0);
+      totalLikes += (v.likes || 0);
+    });
+
+    document.getElementById('stat-views').innerText = totalViews;
+    document.getElementById('stat-likes').innerText = totalLikes;
+    document.getElementById('stat-subs').innerText = (currentUser.subscribers || []).length;
+    document.getElementById('stat-uploads').innerText = myVids.length;
+
+    const tbody = document.getElementById('analytics-table-body');
+    tbody.innerHTML = '';
+
+    if (myVids.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;">No uploads found for your channel</td></tr>`;
+      return;
+    }
+
+    myVids.forEach(v => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><strong>${v.title}</strong></td>
+        <td>${v.category}</td>
+        <td>${v.views || 0}</td>
+        <td>${v.likes || 0}</td>
+        <td>${new Date(v.created_at).toLocaleDateString()}</td>
+        <td><button class="btn btn-sm" onclick="deleteVideo('${v.id}')">DELETE</button></td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  async function deleteVideo(vidId) {
+    if (!confirm("DELETE THIS VIDEO FROM REALINT?")) return;
+    if (supabaseClient) {
+      await supabaseClient.from('videos').delete().eq('id', vidId);
+      fetchCloudVideos();
+    } else {
+      videoDatabase = videoDatabase.filter(v => v.id !== vidId);
+      localStorage.setItem('realint_vids_demo', JSON.stringify(videoDatabase));
+      applyFilters();
+    }
+    renderDashboardAnalytics();
+    updateStatus("DELETED VIDEO.");
   }
 
   function updateStatus(msg) {
