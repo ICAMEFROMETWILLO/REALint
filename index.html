@@ -201,7 +201,6 @@
     font-size: 20px;
   }
 
-  /* Cloudflare bot overlay modal (hidden by default unless triggered) */
   #cf-modal {
     display: none;
     position: fixed;
@@ -250,7 +249,6 @@
 </head>
 <body>
 
-<!-- Hidden Cloudflare Bot Challenge Modal -->
 <div id="cf-modal">
   <div class="cf-modal-box">
     <div class="box-title" style="margin:-15px -15px 10px -15px;">CLOUDFLARE BOT CHECK</div>
@@ -353,14 +351,14 @@
     </div>
   </div>
 
-  <div class="status-bar" id="status-bar">STATUS: LOCAL DATABASE READY. BOT PROTECTION ON STANDBY.</div>
+  <div class="status-bar" id="status-bar">STATUS: LOCAL DATABASE READY. CROSS-BROWSER COMPATIBLE.</div>
 </div>
 
 <script>
   let currentUser = null;
   let activeVideo = null;
   let videoDatabase = [];
-  let userDatabase = {}; // email -> {password, username, subscribers: [], subscriptions: []}
+  let userDatabase = {};
   let cfVerified = false;
   let uploadClickCount = 0;
   let lastUploadTime = 0;
@@ -478,7 +476,6 @@
       return;
     }
 
-    // Heuristic bot detection: if user clicks upload too fast (< 2 seconds between clicks), trigger Cloudflare challenge modal
     const now = Date.now();
     uploadClickCount++;
     if (now - lastUploadTime < 2000 || uploadClickCount > 4) {
@@ -617,7 +614,6 @@
     document.getElementById('player-author').innerText = "Channel: " + video.authorName;
     document.getElementById('player-likes').innerText = video.likes;
 
-    // Channel banner updates
     document.getElementById('banner-channel-name').innerText = video.authorName;
     const authorSubs = userDatabase[video.authorEmail] ? userDatabase[video.authorEmail].subscribers : [];
     document.getElementById('banner-sub-count').innerText = authorSubs.length;
@@ -626,7 +622,7 @@
     if (currentUser) {
       subBtn.style.display = 'inline-block';
       if (currentUser === video.authorEmail) {
-        subBtn.style.display = 'none'; // Can't sub to yourself
+        subBtn.style.display = 'none';
       } else if (authorSubs.includes(currentUser)) {
         subBtn.innerText = "SUBSCRIBED";
       } else {
@@ -695,7 +691,13 @@
 
     if (!activeVideo.liked_by) activeVideo.liked_by = [];
     
-    if (activeVideo.liked_by.includes(currentUser)) {
+    if (activeVideo.liked_by.codes && activeVideo.liked_by.includes(currentUser)) {
+      alert("YOU ALREADY LIKED THIS VIDEO.");
+      return;
+    }
+
+    // Explicit cross-browser array check for likes
+    if (activeVideo.liked_by.indexOf(currentUser) > -1) {
       alert("YOU ALREADY LIKED THIS VIDEO.");
       return;
     }
