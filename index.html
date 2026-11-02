@@ -87,7 +87,7 @@
   }
 
   .auth-input {
-    width: 110px !important;
+    width: 100px !important;
     margin-bottom: 0 !important;
     padding: 2px !important;
   }
@@ -201,14 +201,33 @@
     font-size: 20px;
   }
 
-  .cf-box {
-    margin-top: 6px;
-    margin-bottom: 6px;
-    background: #fff;
-    border: 1px solid #000;
-    padding: 4px;
-    display: flex;
+  /* Cloudflare bot overlay modal (hidden by default unless triggered) */
+  #cf-modal {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.5);
+    z-index: 9999;
     justify-content: center;
+    align-items: center;
+  }
+
+  .cf-modal-box {
+    background: #c0c0c0;
+    border: 3px solid #000;
+    padding: 15px;
+    width: 320px;
+    text-align: center;
+  }
+
+  .channel-banner {
+    background: #e0e0e0;
+    border: 2px solid #000;
+    padding: 6px;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
   }
 
   .share-link {
@@ -231,14 +250,27 @@
 </head>
 <body>
 
+<!-- Hidden Cloudflare Bot Challenge Modal -->
+<div id="cf-modal">
+  <div class="cf-modal-box">
+    <div class="box-title" style="margin:-15px -15px 10px -15px;">CLOUDFLARE BOT CHECK</div>
+    <div style="margin-bottom:8px; font-size:11px;">Suspicious automated activity detected. Please verify you are human:</div>
+    <div style="display:flex; justify-content:center; margin-bottom:10px;">
+      <div class="cf-turnstile" data-sitekey="1x00000000000000000000AA" data-callback="onTurnstileSuccess"></div>
+    </div>
+    <button class="btn" onclick="closeCfModal()">CANCEL</button>
+  </div>
+</div>
+
 <div id="container">
   <header>
     <div class="pixel-title" onclick="goHome()">REALint</div>
     <div class="auth-panel" id="auth-panel">
       <input type="text" id="login-email" class="auth-input" placeholder="EMAIL">
+      <input type="text" id="login-username" class="auth-input" placeholder="USERNAME">
       <input type="password" id="login-pass" class="auth-input" placeholder="PASS">
+      <button class="btn" onclick="accountAction('REGISTER')">SIGN UP</button>
       <button class="btn" onclick="accountAction('LOGIN')">LOGIN</button>
-      <button class="btn" onclick="accountAction('REGISTER')">REGISTER</button>
     </div>
   </header>
 
@@ -247,6 +279,7 @@
       <div class="box">
         <div class="box-title">USER STATUS</div>
         <div id="user-info">NOT LOGGED IN</div>
+        <div id="sub-count-display" style="font-size:11px; margin-top:4px;"></div>
       </div>
 
       <div class="box">
@@ -286,16 +319,16 @@
         <label>Video File (MP4/WebM):</label>
         <input type="file" id="upload-file" accept="video/mp4,video/webm">
         
-        <!-- Cloudflare Turnstile Widget (Anti-Bot Verification for Uploads) -->
-        <div class="cf-box">
-          <div class="cf-turnstile" data-sitekey="1x00000000000000000000AA" data-callback="onTurnstileSuccess"></div>
-        </div>
-
-        <button class="btn" style="width:100%; margin-top:4px;" onclick="uploadVideo()">UPLOAD</button>
+        <button class="btn" style="width:100%; margin-top:6px;" onclick="uploadVideo()">UPLOAD</button>
       </div>
     </div>
 
     <div class="main-content">
+      <div class="channel-banner" id="channel-banner">
+        <div><strong>CHANNEL:</strong> <span id="banner-channel-name">SELECT A VIDEO</span></div>
+        <div><strong>SUBSCRIBERS:</strong> <span id="banner-sub-count">0</span> <button class="btn" id="sub-btn" onclick="toggleSubscribe()" style="margin-left:6px; display:none;">SUBSCRIBE</button></div>
+      </div>
+
       <div class="box">
         <div class="box-title" id="current-video-title">PLAYER: NO MEDIA LOADED</div>
         <div class="video-player-container" id="player-container">
@@ -320,15 +353,17 @@
     </div>
   </div>
 
-  <div class="status-bar" id="status-bar">STATUS: LOCAL DATABASE READY. CLOUDFLARE TURNSTILE ENABLED.</div>
+  <div class="status-bar" id="status-bar">STATUS: LOCAL DATABASE READY. BOT PROTECTION ON STANDBY.</div>
 </div>
 
 <script>
   let currentUser = null;
   let activeVideo = null;
   let videoDatabase = [];
-  let userDatabase = {};
+  let userDatabase = {}; // email -> {password, username, subscribers: [], subscriptions: []}
   let cfVerified = false;
+  let uploadClickCount = 0;
+  let lastUploadTime = 0;
 
   window.onload = function() {
     loadLocalAccounts();
@@ -336,7 +371,6 @@
     handleURLRouting();
   };
 
-  // Handle URL Routing for watchid=? parameters
   window.onpopstate = function() {
     handleURLRouting();
   };
@@ -359,20 +393,21 @@
     applyFilters();
   }
 
-  function onTurnstileSuccess(token) {
-    cfVerified = true;
-    updateStatus("CLOUDFLARE VERIFICATION PASSED.");
-  }
-
   function loadLocalAccounts() {
     const savedUsers = localStorage.getItem('realint_users');
     if (savedUsers) {
       userDatabase = JSON.parse(savedUsers);
     }
+    const savedSession = localStorage.getItem('realint_session');
+    if (savedSession && userDatabase[savedSession]) {
+      currentUser = savedSession;
+      updateUserUI();
+    }
   }
 
   function accountAction(type) {
     const email = document.getElementById('login-email').value.trim().toLowerCase();
+    const username = document.getElementById('login-username').value.trim();
     const pass = document.getElementById('login-pass').value.trim();
 
     if (!email || !pass) {
@@ -381,33 +416,47 @@
     }
 
     if (type === 'REGISTER') {
-      if (userDatabase[email]) {
-        alert("ACCOUNT EXISTS. CLICK LOGIN.");
+      if (!username) {
+        alert("PROVIDE A CHANNEL USERNAME.");
         return;
       }
-      userDatabase[email] = pass;
+      if (userDatabase[email]) {
+        alert("ACCOUNT ALREADY EXISTS. CLICK LOGIN.");
+        return;
+      }
+      userDatabase[email] = {
+        password: pass,
+        username: username,
+        subscribers: [],
+        subscriptions: []
+      };
       localStorage.setItem('realint_users', JSON.stringify(userDatabase));
       currentUser = email;
+      localStorage.setItem('realint_session', currentUser);
       updateUserUI();
-      updateStatus("REGISTERED & LOGGED IN AS " + email.toUpperCase());
+      updateStatus("REGISTERED & LOGGED IN AS " + username);
     } else if (type === 'LOGIN') {
-      if (!userDatabase[email] || userDatabase[email] !== pass) {
+      if (!userDatabase[email] || userDatabase[email].password !== pass) {
         alert("INVALID EMAIL OR PASSWORD.");
         return;
       }
       currentUser = email;
+      localStorage.setItem('realint_session', currentUser);
       updateUserUI();
-      updateStatus("LOGGED IN AS " + email.toUpperCase());
+      updateStatus("LOGGED IN AS " + userDatabase[email].username);
     }
   }
 
   function updateUserUI() {
-    document.getElementById('user-info').innerText = currentUser.toUpperCase();
-    document.getElementById('auth-panel').innerHTML = `<button class="btn" onclick="logout()">LOGOUT (${currentUser.toUpperCase()})</button>`;
+    const userData = userDatabase[currentUser];
+    document.getElementById('user-info').innerText = `${userData.username.toUpperCase()} (${currentUser})`;
+    document.getElementById('sub-count-display').innerText = `Subscribers: ${userData.subscribers.length}`;
+    document.getElementById('auth-panel').innerHTML = `<button class="btn" onclick="logout()">LOGOUT (${userData.username})</button>`;
   }
 
   function logout() {
     currentUser = null;
+    localStorage.removeItem('realint_session');
     window.location.reload();
   }
 
@@ -415,7 +464,7 @@
     const savedVids = localStorage.getItem('realint_videos');
     if (savedVids) {
       videoDatabase = JSON.parse(savedVids);
-      updateStatus("LOADED " + videoDatabase.length + " VIDEOS FROM STORAGE.");
+      updateStatus("LOADED " + videoDatabase.length + " VIDEOS.");
     } else {
       videoDatabase = [];
       updateStatus("NO VIDEOS IN STORAGE.");
@@ -429,11 +478,17 @@
       return;
     }
 
-    // Cloudflare Turnstile Verification Check
-    if (window.turnstile && !cfVerified) {
-      alert("PLEASE COMPLETE THE CLOUDFLARE BOT VERIFICATION.");
-      return;
+    // Heuristic bot detection: if user clicks upload too fast (< 2 seconds between clicks), trigger Cloudflare challenge modal
+    const now = Date.now();
+    uploadClickCount++;
+    if (now - lastUploadTime < 2000 || uploadClickCount > 4) {
+      if (!cfVerified) {
+        document.getElementById('cf-modal').style.display = 'flex';
+        updateStatus("BOT ACTIVITY SUSPECTED. CLOUDFLARE CHALLENGE REQUIRED.");
+        return;
+      }
     }
+    lastUploadTime = now;
 
     const titleInput = document.getElementById('upload-title').value.trim();
     const categoryInput = document.getElementById('upload-category').value;
@@ -449,13 +504,15 @@
     updateStatus("PROCESSING VIDEO FILE...");
 
     reader.onload = function(e) {
+      const uData = userDatabase[currentUser];
       const videoRecord = {
         id: "v_" + Math.random().toString(36).substr(2, 9),
         title: titleInput,
         category: categoryInput,
         video_url: e.target.result,
         mime_type: file.type,
-        author: currentUser,
+        authorEmail: currentUser,
+        authorName: uData.username,
         likes: 0,
         liked_by: [],
         timestamp: Date.now()
@@ -466,17 +523,28 @@
         localStorage.setItem('realint_videos', JSON.stringify(videoDatabase));
         updateStatus("SUCCESSFULLY PUBLISHED VIDEO.");
         cfVerified = false;
-        if (window.turnstile) turnstile.reset();
+        uploadClickCount = 0;
         loadVideoIntoPlayer(videoRecord, true);
         applyFilters();
       } catch(err) {
-        alert("FILE TOO LARGE FOR LOCAL STORAGE. USE A SMALL MP4/WEBM FILE.");
+        alert("FILE TOO LARGE FOR LOCAL STORAGE. USE A SMALLER FILE.");
         updateStatus("STORAGE LIMIT EXCEEDED.");
         videoDatabase.shift();
       }
     };
 
     reader.readAsDataURL(file);
+  }
+
+  function onTurnstileSuccess(token) {
+    cfVerified = true;
+    document.getElementById('cf-modal').style.display = 'none';
+    updateStatus("CLOUDFLARE VERIFICATION PASSED. YOU MAY CONTINUE.");
+  }
+
+  function closeCfModal() {
+    document.getElementById('cf-modal').style.display = 'none';
+    updateStatus("CHALLENGE CANCELLED.");
   }
 
   function applyFilters() {
@@ -521,7 +589,7 @@
     grid.innerHTML = '';
 
     if (videos.length === 0) {
-      grid.innerHTML = `<div class="no-videos-message">NO VIDEOS FOUND IN DATABASE</div>`;
+      grid.innerHTML = `<div class="no-videos-message">NO VIDEOS FOUND</div>`;
       return;
     }
 
@@ -530,10 +598,12 @@
       card.className = 'video-card';
       card.onclick = () => loadVideoIntoPlayer(v, true);
 
+      const authorSubCount = userDatabase[v.authorEmail] ? userDatabase[v.authorEmail].subscribers.length : 0;
+
       card.innerHTML = `
         <div class="video-thumb">${v.category.toUpperCase()}</div>
         <div style="font-weight:bold; margin-top:4px;">${v.title}</div>
-        <div class="meta">By: ${v.author}</div>
+        <div class="meta">Channel: ${v.authorName} (${authorSubCount} Subs)</div>
         <div class="meta">Likes: ${v.likes} | ${new Date(v.timestamp).toLocaleDateString()}</div>
       `;
       grid.appendChild(card);
@@ -544,8 +614,27 @@
     activeVideo = video;
     document.getElementById('current-video-title').innerText = "PLAYER: " + video.title.toUpperCase();
     document.getElementById('player-category').innerText = "CAT: " + video.category.toUpperCase();
-    document.getElementById('player-author').innerText = "By: " + video.author;
+    document.getElementById('player-author').innerText = "Channel: " + video.authorName;
     document.getElementById('player-likes').innerText = video.likes;
+
+    // Channel banner updates
+    document.getElementById('banner-channel-name').innerText = video.authorName;
+    const authorSubs = userDatabase[video.authorEmail] ? userDatabase[video.authorEmail].subscribers : [];
+    document.getElementById('banner-sub-count').innerText = authorSubs.length;
+
+    const subBtn = document.getElementById('sub-btn');
+    if (currentUser) {
+      subBtn.style.display = 'inline-block';
+      if (currentUser === video.authorEmail) {
+        subBtn.style.display = 'none'; // Can't sub to yourself
+      } else if (authorSubs.includes(currentUser)) {
+        subBtn.innerText = "SUBSCRIBED";
+      } else {
+        subBtn.innerText = "SUBSCRIBE";
+      }
+    } else {
+      subBtn.style.display = 'none';
+    }
 
     const directURL = window.location.protocol + "//" + window.location.host + window.location.pathname + "?watchid=" + video.id;
     document.getElementById('share-link-box').innerText = "DIRECT LINK: " + directURL;
@@ -560,12 +649,37 @@
     updateStatus("LOADED VIDEO: " + video.title);
   }
 
+  function toggleSubscribe() {
+    if (!currentUser || !activeVideo) return;
+    const authorEmail = activeVideo.authorEmail;
+    if (currentUser === authorEmail) return;
+
+    let authorData = userDatabase[authorEmail];
+    if (!authorData.subscribers) authorData.subscribers = [];
+
+    const index = authorData.subscribers.indexOf(currentUser);
+    if (index > -1) {
+      authorData.subscribers.splice(index, 1);
+      updateStatus("UNSUBSCRIBED FROM " + authorData.username);
+    } else {
+      authorData.subscribers.push(currentUser);
+      updateStatus("SUBSCRIBED TO " + authorData.username);
+    }
+
+    localStorage.setItem('realint_users', JSON.stringify(userDatabase));
+    loadVideoIntoPlayer(activeVideo, false);
+    applyFilters();
+  }
+
   function resetPlayer() {
     activeVideo = null;
     document.getElementById('current-video-title').innerText = "PLAYER: NO MEDIA LOADED";
     document.getElementById('player-category').innerText = "CAT: NONE";
-    document.getElementById('player-author').innerText = "By: N/A";
+    document.getElementById('player-author').innerText = "Channel: N/A";
     document.getElementById('player-likes').innerText = "0";
+    document.getElementById('banner-channel-name').innerText = "SELECT A VIDEO";
+    document.getElementById('banner-sub-count').innerText = "0";
+    document.getElementById('sub-btn').style.display = 'none';
     document.getElementById('share-link-box').innerText = "DIRECT LINK: N/A";
 
     const container = document.getElementById('player-container');
@@ -591,7 +705,7 @@
     document.getElementById('player-likes').innerText = activeVideo.likes;
 
     localStorage.setItem('realint_videos', JSON.stringify(videoDatabase));
-    updateStatus("LIKE REGISTERED FOR " + currentUser.toUpperCase());
+    updateStatus("LIKE REGISTERED.");
     applyFilters();
   }
 
