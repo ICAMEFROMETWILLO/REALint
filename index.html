@@ -3,9 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>REALint</title>
-<!-- Cloudflare Turnstile CAPTCHA API -->
-<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+<title>REALint - Global Cloud Stream</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
 
@@ -56,11 +54,6 @@
     margin-bottom: 10px;
   }
 
-  header h1 {
-    color: #fff;
-    font-size: 32px;
-  }
-
   .auth-panel {
     background: #ffffcc;
     border: 2px solid #000;
@@ -87,7 +80,7 @@
   }
 
   .auth-input {
-    width: 100px !important;
+    width: 110px !important;
     margin-bottom: 0 !important;
     padding: 2px !important;
   }
@@ -201,24 +194,6 @@
     font-size: 20px;
   }
 
-  #cf-modal {
-    display: none;
-    position: fixed;
-    top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(0,0,0,0.5);
-    z-index: 9999;
-    justify-content: center;
-    align-items: center;
-  }
-
-  .cf-modal-box {
-    background: #c0c0c0;
-    border: 3px solid #000;
-    padding: 15px;
-    width: 320px;
-    text-align: center;
-  }
-
   .channel-banner {
     background: #e0e0e0;
     border: 2px solid #000;
@@ -246,29 +221,19 @@
     font-size: 11px;
   }
 </style>
+<!-- Supabase SDK for Real Cloud Database and Global Video Storage -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
-
-<div id="cf-modal">
-  <div class="cf-modal-box">
-    <div class="box-title" style="margin:-15px -15px 10px -15px;">CLOUDFLARE BOT CHECK</div>
-    <div style="margin-bottom:8px; font-size:11px;">Suspicious automated activity detected. Please verify you are human:</div>
-    <div style="display:flex; justify-content:center; margin-bottom:10px;">
-      <div class="cf-turnstile" data-sitekey="1x00000000000000000000AA" data-callback="onTurnstileSuccess"></div>
-    </div>
-    <button class="btn" onclick="closeCfModal()">CANCEL</button>
-  </div>
-</div>
 
 <div id="container">
   <header>
     <div class="pixel-title" onclick="goHome()">REALint</div>
     <div class="auth-panel" id="auth-panel">
       <input type="text" id="login-email" class="auth-input" placeholder="EMAIL">
-      <input type="text" id="login-username" class="auth-input" placeholder="USERNAME">
       <input type="password" id="login-pass" class="auth-input" placeholder="PASS">
-      <button class="btn" onclick="accountAction('REGISTER')">SIGN UP</button>
-      <button class="btn" onclick="accountAction('LOGIN')">LOGIN</button>
+      <button class="btn" onclick="cloudLogin('LOGIN')">LOGIN</button>
+      <button class="btn" onclick="cloudLogin('REGISTER')">SIGN UP</button>
     </div>
   </header>
 
@@ -302,7 +267,7 @@
       </div>
 
       <div class="box">
-        <div class="box-title">UPLOAD VIDEO</div>
+        <div class="box-title">CLOUD UPLOAD</div>
         <label>Title:</label>
         <input type="text" id="upload-title">
         
@@ -317,7 +282,7 @@
         <label>Video File (MP4/WebM):</label>
         <input type="file" id="upload-file" accept="video/mp4,video/webm">
         
-        <button class="btn" style="width:100%; margin-top:6px;" onclick="uploadVideo()">UPLOAD</button>
+        <button class="btn" style="width:100%; margin-top:6px;" onclick="uploadToCloudServer()">UPLOAD TO CLOUD</button>
       </div>
     </div>
 
@@ -338,34 +303,39 @@
             <span id="player-author" style="margin-left:8px;">By: N/A</span>
           </div>
           <div>
-            <button class="btn" onclick="likeCurrentVideo()">LIKE (<span id="player-likes">0</span>)</button>
+            <button class="btn" onclick="likeVideoOnCloud()">LIKE (<span id="player-likes">0</span>)</button>
           </div>
         </div>
         <div class="share-link" id="share-link-box">DIRECT LINK: N/A</div>
       </div>
 
       <div class="box">
-        <div class="box-title">VIDEO INDEX</div>
+        <div class="box-title">GLOBAL VIDEO INDEX</div>
         <div class="video-grid" id="video-grid"></div>
       </div>
     </div>
   </div>
 
-  <div class="status-bar" id="status-bar">STATUS: LOCAL DATABASE READY. CROSS-BROWSER COMPATIBLE.</div>
+  <div class="status-bar" id="status-bar">STATUS: HARD RESET PERFORMED. CONNECTING TO CLOUD SERVER...</div>
 </div>
 
 <script>
+  // Hard wipe local storage completely to erase old local archives
+  localStorage.clear();
+
+  // Supabase Cloud Configuration (Free Tier Server Backend)
+  const SUPABASE_URL = "https://YOUR-PROJECT-ID.supabase.co";
+  const SUPABASE_ANON_KEY = "YOUR-PUBLIC-ANON-KEY";
+  
+  const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
   let currentUser = null;
   let activeVideo = null;
   let videoDatabase = [];
-  let userDatabase = {};
-  let cfVerified = false;
-  let uploadClickCount = 0;
-  let lastUploadTime = 0;
 
   window.onload = function() {
-    loadLocalAccounts();
-    loadLocalVideos();
+    checkCloudSession();
+    fetchCloudVideos();
     handleURLRouting();
   };
 
@@ -378,7 +348,7 @@
     const watchId = urlParams.get('watchid');
 
     if (watchId && videoDatabase.length > 0) {
-      const targetVideo = videoDatabase.find(v => v.id === watchId);
+      const targetVideo = videoDatabase.find(v => v.id == watchId);
       if (targetVideo) {
         loadVideoIntoPlayer(targetVideo, false);
       }
@@ -391,101 +361,76 @@
     applyFilters();
   }
 
-  function loadLocalAccounts() {
-    const savedUsers = localStorage.getItem('realint_users');
-    if (savedUsers) {
-      userDatabase = JSON.parse(savedUsers);
-    }
-    const savedSession = localStorage.getItem('realint_session');
-    if (savedSession && userDatabase[savedSession]) {
-      currentUser = savedSession;
+  async function checkCloudSession() {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (session) {
+      currentUser = session.user;
       updateUserUI();
     }
   }
 
-  function accountAction(type) {
-    const email = document.getElementById('login-email').value.trim().toLowerCase();
-    const username = document.getElementById('login-username').value.trim();
+  async function cloudLogin(type) {
+    const email = document.getElementById('login-email').value.trim();
     const pass = document.getElementById('login-pass').value.trim();
 
     if (!email || !pass) {
-      alert("PROVIDE BOTH EMAIL AND PASSWORD.");
+      alert("PROVIDE EMAIL AND PASSWORD.");
       return;
     }
 
     if (type === 'REGISTER') {
-      if (!username) {
-        alert("PROVIDE A CHANNEL USERNAME.");
-        return;
+      const { data, error } = await supabaseClient.auth.signUp({ email, password: pass });
+      if (error) {
+        alert("REGISTRATION ERROR: " + error.message);
+      } else {
+        alert("SUCCESS! CHECK YOUR EMAIL OR CONFIRMATION.");
+        updateStatus("REGISTERED ACCOUNT.");
       }
-      if (userDatabase[email]) {
-        alert("ACCOUNT ALREADY EXISTS. CLICK LOGIN.");
-        return;
-      }
-      userDatabase[email] = {
-        password: pass,
-        username: username,
-        subscribers: [],
-        subscriptions: []
-      };
-      localStorage.setItem('realint_users', JSON.stringify(userDatabase));
-      currentUser = email;
-      localStorage.setItem('realint_session', currentUser);
-      updateUserUI();
-      updateStatus("REGISTERED & LOGGED IN AS " + username);
     } else if (type === 'LOGIN') {
-      if (!userDatabase[email] || userDatabase[email].password !== pass) {
-        alert("INVALID EMAIL OR PASSWORD.");
-        return;
+      const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password: pass });
+      if (error) {
+        alert("LOGIN ERROR: " + error.message);
+      } else {
+        currentUser = data.user;
+        updateUserUI();
+        updateStatus("LOGGED IN AS " + currentUser.email);
       }
-      currentUser = email;
-      localStorage.setItem('realint_session', currentUser);
-      updateUserUI();
-      updateStatus("LOGGED IN AS " + userDatabase[email].username);
     }
   }
 
   function updateUserUI() {
-    const userData = userDatabase[currentUser];
-    document.getElementById('user-info').innerText = `${userData.username.toUpperCase()} (${currentUser})`;
-    document.getElementById('sub-count-display').innerText = `Subscribers: ${userData.subscribers.length}`;
-    document.getElementById('auth-panel').innerHTML = `<button class="btn" onclick="logout()">LOGOUT (${userData.username})</button>`;
+    document.getElementById('user-info').innerText = currentUser.email.toUpperCase();
+    document.getElementById('auth-panel').innerHTML = `<button class="btn" onclick="cloudLogout()">LOGOUT</button>`;
   }
 
-  function logout() {
+  async function cloudLogout() {
+    await supabaseClient.auth.signOut();
     currentUser = null;
-    localStorage.removeItem('realint_session');
     window.location.reload();
   }
 
-  function loadLocalVideos() {
-    const savedVids = localStorage.getItem('realint_videos');
-    if (savedVids) {
-      videoDatabase = JSON.parse(savedVids);
-      updateStatus("LOADED " + videoDatabase.length + " VIDEOS.");
-    } else {
+  async function fetchCloudVideos() {
+    updateStatus("FETCHING VIDEOS FROM CLOUD SERVER...");
+    const { data, error } = await supabaseClient
+      .from('videos')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      updateStatus("CLOUD ERROR: " + error.message);
       videoDatabase = [];
-      updateStatus("NO VIDEOS IN STORAGE.");
+    } else {
+      videoDatabase = data || [];
+      updateStatus("LOADED " + videoDatabase.length + " VIDEOS FROM CLOUD SERVER.");
     }
     applyFilters();
   }
 
-  function uploadVideo() {
+  async function uploadToCloudServer() {
     if (!currentUser) {
-      alert("MUST LOGIN OR REGISTER TO UPLOAD.");
+      alert("MUST LOGIN TO UPLOAD TO THE CLOUD.");
       return;
     }
-
-    const now = Date.now();
-    uploadClickCount++;
-    if (now - lastUploadTime < 2000 || uploadClickCount > 4) {
-      if (!cfVerified) {
-        document.getElementById('cf-modal').style.display = 'flex';
-        updateStatus("BOT ACTIVITY SUSPECTED. CLOUDFLARE CHALLENGE REQUIRED.");
-        return;
-      }
-    }
-    lastUploadTime = now;
 
     const titleInput = document.getElementById('upload-title').value.trim();
     const categoryInput = document.getElementById('upload-category').value;
@@ -493,55 +438,54 @@
     const file = fileInput.files[0];
 
     if (!titleInput || !file) {
-      alert("PROVIDE TITLE AND FILE.");
+      alert("PROVIDE A TITLE AND VIDEO FILE.");
       return;
     }
 
-    const reader = new FileReader();
-    updateStatus("PROCESSING VIDEO FILE...");
+    updateStatus("UPLOADING VIDEO FILE TO CLOUD STORAGE...");
+    const filePath = `uploads/${Date.now()}_${file.name}`;
 
-    reader.onload = function(e) {
-      const uData = userDatabase[currentUser];
-      const videoRecord = {
-        id: "v_" + Math.random().toString(36).substr(2, 9),
-        title: titleInput,
-        category: categoryInput,
-        video_url: e.target.result,
-        mime_type: file.type,
-        authorEmail: currentUser,
-        authorName: uData.username,
-        likes: 0,
-        liked_by: [],
-        timestamp: Date.now()
-      };
+    // 1. Upload video file to Supabase Cloud Storage bucket
+    const { data: storageData, error: storageError } = await supabaseClient.storage
+      .from('cloud-videos')
+      .upload(filePath, file);
 
-      videoDatabase.unshift(videoRecord);
-      try {
-        localStorage.setItem('realint_videos', JSON.stringify(videoDatabase));
-        updateStatus("SUCCESSFULLY PUBLISHED VIDEO.");
-        cfVerified = false;
-        uploadClickCount = 0;
-        loadVideoIntoPlayer(videoRecord, true);
-        applyFilters();
-      } catch(err) {
-        alert("FILE TOO LARGE FOR LOCAL STORAGE. USE A SMALLER FILE.");
-        updateStatus("STORAGE LIMIT EXCEEDED.");
-        videoDatabase.shift();
-      }
-    };
+    if (storageError) {
+      alert("STORAGE UPLOAD FAILED: " + storageError.message);
+      updateStatus("UPLOAD FAILED.");
+      return;
+    }
 
-    reader.readAsDataURL(file);
-  }
+    // 2. Get Public URL from Cloud
+    const { data: publicUrlData } = supabaseClient.storage
+      .from('cloud-videos')
+      .getPublicUrl(filePath);
 
-  function onTurnstileSuccess(token) {
-    cfVerified = true;
-    document.getElementById('cf-modal').style.display = 'none';
-    updateStatus("CLOUDFLARE VERIFICATION PASSED. YOU MAY CONTINUE.");
-  }
+    const videoUrl = publicUrlData.publicUrl;
 
-  function closeCfModal() {
-    document.getElementById('cf-modal').style.display = 'none';
-    updateStatus("CHALLENGE CANCELLED.");
+    updateStatus("SAVING METADATA TO CLOUD DATABASE...");
+
+    // 3. Save Record to Cloud Database table
+    const { data: dbData, error: dbError } = await supabaseClient
+      .from('videos')
+      .insert([
+        {
+          title: titleInput,
+          category: categoryInput,
+          video_url: videoUrl,
+          author_email: currentUser.email,
+          likes: 0
+        }
+      ])
+      .select();
+
+    if (dbError) {
+      alert("DATABASE SAVE FAILED: " + dbError.message);
+      updateStatus("DATABASE ERROR.");
+    } else {
+      updateStatus("SUCCESSFULLY PUBLISHED TO GLOBAL CLOUD.");
+      fetchCloudVideos();
+    }
   }
 
   function applyFilters() {
@@ -557,14 +501,16 @@
 
     if (sortVal === 'TRENDING') {
       filtered.sort((a, b) => {
-        const ageA = (Date.now() - a.timestamp) / 3600000 + 2;
-        const ageB = (Date.now() - b.timestamp) / 3600000 + 2;
+        const timeA = new Date(a.created_at).getTime();
+        const timeB = new Date(b.created_at).getTime();
+        const ageA = (Date.now() - timeA) / 3600000 + 2;
+        const ageB = (Date.now() - timeB) / 3600000 + 2;
         const scoreA = a.likes / Math.pow(ageA, 1.5);
         const scoreB = b.likes / Math.pow(ageB, 1.5);
         return scoreB - scoreA;
       });
     } else if (sortVal === 'NEWEST') {
-      filtered.sort((a, b) => b.timestamp - a.timestamp);
+      filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     }
 
     renderGrid(filtered);
@@ -573,7 +519,7 @@
     const watchId = urlParams.get('watchid');
 
     if (!watchId && filtered.length > 0) {
-      if (!activeVideo || !filtered.some(v => v.id === activeVideo.id)) {
+      if (!activeVideo || !filtered.some(v => v.id == activeVideo.id)) {
         loadVideoIntoPlayer(filtered[0], false);
       }
     } else if (filtered.length === 0) {
@@ -586,7 +532,7 @@
     grid.innerHTML = '';
 
     if (videos.length === 0) {
-      grid.innerHTML = `<div class="no-videos-message">NO VIDEOS FOUND</div>`;
+      grid.innerHTML = `<div class="no-videos-message">NO VIDEOS ON CLOUD SERVER YET</div>`;
       return;
     }
 
@@ -595,13 +541,11 @@
       card.className = 'video-card';
       card.onclick = () => loadVideoIntoPlayer(v, true);
 
-      const authorSubCount = userDatabase[v.authorEmail] ? userDatabase[v.authorEmail].subscribers.length : 0;
-
       card.innerHTML = `
         <div class="video-thumb">${v.category.toUpperCase()}</div>
         <div style="font-weight:bold; margin-top:4px;">${v.title}</div>
-        <div class="meta">Channel: ${v.authorName} (${authorSubCount} Subs)</div>
-        <div class="meta">Likes: ${v.likes} | ${new Date(v.timestamp).toLocaleDateString()}</div>
+        <div class="meta">By: ${v.author_email}</div>
+        <div class="meta">Likes: ${v.likes} | ${new Date(v.created_at).toLocaleDateString()}</div>
       `;
       grid.appendChild(card);
     });
@@ -611,104 +555,59 @@
     activeVideo = video;
     document.getElementById('current-video-title').innerText = "PLAYER: " + video.title.toUpperCase();
     document.getElementById('player-category').innerText = "CAT: " + video.category.toUpperCase();
-    document.getElementById('player-author').innerText = "Channel: " + video.authorName;
+    document.getElementById('player-author').innerText = "By: " + video.author_email;
     document.getElementById('player-likes').innerText = video.likes;
 
-    document.getElementById('banner-channel-name').innerText = video.authorName;
-    const authorSubs = userDatabase[video.authorEmail] ? userDatabase[video.authorEmail].subscribers : [];
-    document.getElementById('banner-sub-count').innerText = authorSubs.length;
-
-    const subBtn = document.getElementById('sub-btn');
-    if (currentUser) {
-      subBtn.style.display = 'inline-block';
-      if (currentUser === video.authorEmail) {
-        subBtn.style.display = 'none';
-      } else if (authorSubs.includes(currentUser)) {
-        subBtn.innerText = "SUBSCRIBED";
-      } else {
-        subBtn.innerText = "SUBSCRIBE";
-      }
-    } else {
-      subBtn.style.display = 'none';
-    }
+    document.getElementById('banner-channel-name').innerText = video.author_email;
+    document.getElementById('banner-sub-count').innerText = "Public Cloud";
 
     const directURL = window.location.protocol + "//" + window.location.host + window.location.pathname + "?watchid=" + video.id;
-    document.getElementById('share-link-box').innerText = "DIRECT LINK: " + directURL;
+    document.getElementById('share-link-box').innerText = "DIRECT LINK (SHAREABLE): " + directURL;
 
     if (updateURL) {
       window.history.pushState({ path: directURL }, '', directURL);
     }
 
     const container = document.getElementById('player-container');
-    container.innerHTML = `<video id="main-player" controls preload="metadata"><source src="${video.video_url}" type="${video.mime_type || 'video/mp4'}">Your browser does not support HTML5 video.</video>`;
+    container.innerHTML = `<video id="main-player" controls preload="metadata"><source src="${video.video_url}" type="video/mp4">Your browser does not support HTML5 video.</video>`;
 
-    updateStatus("LOADED VIDEO: " + video.title);
-  }
-
-  function toggleSubscribe() {
-    if (!currentUser || !activeVideo) return;
-    const authorEmail = activeVideo.authorEmail;
-    if (currentUser === authorEmail) return;
-
-    let authorData = userDatabase[authorEmail];
-    if (!authorData.subscribers) authorData.subscribers = [];
-
-    const index = authorData.subscribers.indexOf(currentUser);
-    if (index > -1) {
-      authorData.subscribers.splice(index, 1);
-      updateStatus("UNSUBSCRIBED FROM " + authorData.username);
-    } else {
-      authorData.subscribers.push(currentUser);
-      updateStatus("SUBSCRIBED TO " + authorData.username);
-    }
-
-    localStorage.setItem('realint_users', JSON.stringify(userDatabase));
-    loadVideoIntoPlayer(activeVideo, false);
-    applyFilters();
+    updateStatus("LOADED VIDEO FROM CLOUD: " + video.title);
   }
 
   function resetPlayer() {
     activeVideo = null;
     document.getElementById('current-video-title').innerText = "PLAYER: NO MEDIA LOADED";
     document.getElementById('player-category').innerText = "CAT: NONE";
-    document.getElementById('player-author').innerText = "Channel: N/A";
+    document.getElementById('player-author').innerText = "By: N/A";
     document.getElementById('player-likes').innerText = "0";
     document.getElementById('banner-channel-name').innerText = "SELECT A VIDEO";
-    document.getElementById('banner-sub-count').innerText = "0";
-    document.getElementById('sub-btn').style.display = 'none';
     document.getElementById('share-link-box').innerText = "DIRECT LINK: N/A";
 
     const container = document.getElementById('player-container');
     container.innerHTML = `<span id="player-placeholder">NO VIDEOS FOUND</span>`;
   }
 
-  function likeCurrentVideo() {
+  async function likeVideoOnCloud() {
     if (!activeVideo) return;
     if (!currentUser) {
-      alert("MUST BE LOGGED IN TO LIKE.");
+      alert("MUST LOGIN TO LIKE VIDEOS.");
       return;
     }
 
-    if (!activeVideo.liked_by) activeVideo.liked_by = [];
-    
-    if (activeVideo.liked_by.codes && activeVideo.liked_by.includes(currentUser)) {
-      alert("YOU ALREADY LIKED THIS VIDEO.");
-      return;
+    const newLikes = activeVideo.likes + 1;
+    const { error } = await supabaseClient
+      .from('videos')
+      .update({ likes: newLikes })
+      .eq('id', activeVideo.id);
+
+    if (error) {
+      alert("LIKE ERROR: " + error.message);
+    } else {
+      activeVideo.likes = newLikes;
+      document.getElementById('player-likes').innerText = activeVideo.likes;
+      updateStatus("LIKE REGISTERED ON CLOUD.");
+      fetchCloudVideos();
     }
-
-    // Explicit cross-browser array check for likes
-    if (activeVideo.liked_by.indexOf(currentUser) > -1) {
-      alert("YOU ALREADY LIKED THIS VIDEO.");
-      return;
-    }
-
-    activeVideo.likes += 1;
-    activeVideo.liked_by.push(currentUser);
-    document.getElementById('player-likes').innerText = activeVideo.likes;
-
-    localStorage.setItem('realint_videos', JSON.stringify(videoDatabase));
-    updateStatus("LIKE REGISTERED.");
-    applyFilters();
   }
 
   function updateStatus(msg) {
