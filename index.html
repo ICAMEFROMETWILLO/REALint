@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>REALint</title>
+<!-- Cloudflare Turnstile CAPTCHA API -->
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
 
@@ -32,6 +34,7 @@
     font-size: 36px;
     color: #000080;
     text-transform: uppercase;
+    cursor: pointer;
   }
 
   #container {
@@ -198,6 +201,25 @@
     font-size: 20px;
   }
 
+  .cf-box {
+    margin-top: 6px;
+    margin-bottom: 6px;
+    background: #fff;
+    border: 1px solid #000;
+    padding: 4px;
+    display: flex;
+    justify-content: center;
+  }
+
+  .share-link {
+    font-size: 10px;
+    word-break: break-all;
+    background: #fff;
+    border: 1px solid #000;
+    padding: 2px 4px;
+    margin-top: 4px;
+  }
+
   .status-bar {
     background: #c0c0c0;
     border: 2px solid #000;
@@ -211,7 +233,7 @@
 
 <div id="container">
   <header>
-    <div class="pixel-title">REALint</div>
+    <div class="pixel-title" onclick="goHome()">REALint</div>
     <div class="auth-panel" id="auth-panel">
       <input type="text" id="login-email" class="auth-input" placeholder="EMAIL">
       <input type="password" id="login-pass" class="auth-input" placeholder="PASS">
@@ -264,7 +286,12 @@
         <label>Video File (MP4/WebM):</label>
         <input type="file" id="upload-file" accept="video/mp4,video/webm">
         
-        <button class="btn" style="width:100%; margin-top:6px;" onclick="uploadVideo()">UPLOAD</button>
+        <!-- Cloudflare Turnstile Widget (Anti-Bot Verification for Uploads) -->
+        <div class="cf-box">
+          <div class="cf-turnstile" data-sitekey="1x00000000000000000000AA" data-callback="onTurnstileSuccess"></div>
+        </div>
+
+        <button class="btn" style="width:100%; margin-top:4px;" onclick="uploadVideo()">UPLOAD</button>
       </div>
     </div>
 
@@ -283,6 +310,7 @@
             <button class="btn" onclick="likeCurrentVideo()">LIKE (<span id="player-likes">0</span>)</button>
           </div>
         </div>
+        <div class="share-link" id="share-link-box">DIRECT LINK: N/A</div>
       </div>
 
       <div class="box">
@@ -292,7 +320,7 @@
     </div>
   </div>
 
-  <div class="status-bar" id="status-bar">STATUS: LOCAL DATABASE READY. NO AWS KEYS NEEDED.</div>
+  <div class="status-bar" id="status-bar">STATUS: LOCAL DATABASE READY. CLOUDFLARE TURNSTILE ENABLED.</div>
 </div>
 
 <script>
@@ -300,11 +328,41 @@
   let activeVideo = null;
   let videoDatabase = [];
   let userDatabase = {};
+  let cfVerified = false;
 
   window.onload = function() {
     loadLocalAccounts();
     loadLocalVideos();
+    handleURLRouting();
   };
+
+  // Handle URL Routing for watchid=? parameters
+  window.onpopstate = function() {
+    handleURLRouting();
+  };
+
+  function handleURLRouting() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const watchId = urlParams.get('watchid');
+
+    if (watchId && videoDatabase.length > 0) {
+      const targetVideo = videoDatabase.find(v => v.id === watchId);
+      if (targetVideo) {
+        loadVideoIntoPlayer(targetVideo, false);
+      }
+    }
+  }
+
+  function goHome() {
+    const baseURL = window.location.protocol + "//" + window.location.host + window.location.pathname;
+    window.history.pushState({ path: baseURL }, '', baseURL);
+    applyFilters();
+  }
+
+  function onTurnstileSuccess(token) {
+    cfVerified = true;
+    updateStatus("CLOUDFLARE VERIFICATION PASSED.");
+  }
 
   function loadLocalAccounts() {
     const savedUsers = localStorage.getItem('realint_users');
@@ -371,6 +429,12 @@
       return;
     }
 
+    // Cloudflare Turnstile Verification Check
+    if (window.turnstile && !cfVerified) {
+      alert("PLEASE COMPLETE THE CLOUDFLARE BOT VERIFICATION.");
+      return;
+    }
+
     const titleInput = document.getElementById('upload-title').value.trim();
     const categoryInput = document.getElementById('upload-category').value;
     const fileInput = document.getElementById('upload-file');
@@ -386,7 +450,7 @@
 
     reader.onload = function(e) {
       const videoRecord = {
-        id: "vid_" + Date.now(),
+        id: "v_" + Math.random().toString(36).substr(2, 9),
         title: titleInput,
         category: categoryInput,
         video_url: e.target.result,
@@ -401,6 +465,9 @@
       try {
         localStorage.setItem('realint_videos', JSON.stringify(videoDatabase));
         updateStatus("SUCCESSFULLY PUBLISHED VIDEO.");
+        cfVerified = false;
+        if (window.turnstile) turnstile.reset();
+        loadVideoIntoPlayer(videoRecord, true);
         applyFilters();
       } catch(err) {
         alert("FILE TOO LARGE FOR LOCAL STORAGE. USE A SMALL MP4/WEBM FILE.");
@@ -437,11 +504,14 @@
 
     renderGrid(filtered);
 
-    if (filtered.length > 0) {
+    const urlParams = new URLSearchParams(window.location.search);
+    const watchId = urlParams.get('watchid');
+
+    if (!watchId && filtered.length > 0) {
       if (!activeVideo || !filtered.some(v => v.id === activeVideo.id)) {
-        loadVideoIntoPlayer(filtered[0]);
+        loadVideoIntoPlayer(filtered[0], false);
       }
-    } else {
+    } else if (filtered.length === 0) {
       resetPlayer();
     }
   }
@@ -458,7 +528,7 @@
     videos.forEach(v => {
       const card = document.createElement('div');
       card.className = 'video-card';
-      card.onclick = () => loadVideoIntoPlayer(v);
+      card.onclick = () => loadVideoIntoPlayer(v, true);
 
       card.innerHTML = `
         <div class="video-thumb">${v.category.toUpperCase()}</div>
@@ -470,12 +540,19 @@
     });
   }
 
-  function loadVideoIntoPlayer(video) {
+  function loadVideoIntoPlayer(video, updateURL) {
     activeVideo = video;
     document.getElementById('current-video-title').innerText = "PLAYER: " + video.title.toUpperCase();
     document.getElementById('player-category').innerText = "CAT: " + video.category.toUpperCase();
     document.getElementById('player-author').innerText = "By: " + video.author;
     document.getElementById('player-likes').innerText = video.likes;
+
+    const directURL = window.location.protocol + "//" + window.location.host + window.location.pathname + "?watchid=" + video.id;
+    document.getElementById('share-link-box').innerText = "DIRECT LINK: " + directURL;
+
+    if (updateURL) {
+      window.history.pushState({ path: directURL }, '', directURL);
+    }
 
     const container = document.getElementById('player-container');
     container.innerHTML = `<video id="main-player" controls preload="metadata"><source src="${video.video_url}" type="${video.mime_type || 'video/mp4'}">Your browser does not support HTML5 video.</video>`;
@@ -489,6 +566,7 @@
     document.getElementById('player-category').innerText = "CAT: NONE";
     document.getElementById('player-author').innerText = "By: N/A";
     document.getElementById('player-likes').innerText = "0";
+    document.getElementById('share-link-box').innerText = "DIRECT LINK: N/A";
 
     const container = document.getElementById('player-container');
     container.innerHTML = `<span id="player-placeholder">NO VIDEOS FOUND</span>`;
