@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>REALint</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+
+  * {
+    box-sizing: border-box;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 12px;
+  }
+
+  body {
+    background-color: #e0e0e0;
+    color: #000;
+    margin: 0;
+    padding: 10px;
+  }
+
+  h1, h2, h3, .pixel-text {
+    font-family: 'VT323', monospace;
+    font-size: 22px;
+    margin: 0;
+    letter-spacing: 1px;
+  }
+
+  .pixel-title {
+    font-family: 'VT323', monospace;
+    font-size: 36px;
+    color: #000080;
+    text-transform: uppercase;
+  }
+
+  #container {
+    width: 960px;
+    margin: 0 auto;
+    background: #c0c0c0;
+    border: 3px solid #000;
+    padding: 10px;
+  }
+
+  header {
+    background: #000080;
+    color: #fff;
+    padding: 6px 10px;
+    border: 2px solid #000;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+
+  header h1 {
+    color: #fff;
+    font-size: 32px;
+  }
+
+  .auth-panel {
+    background: #ffffcc;
+    border: 2px solid #000;
+    padding: 6px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .btn {
+    background: #c0c0c0;
+    border: 2px solid;
+    border-color: #fff #808080 #808080 #fff;
+    padding: 3px 8px;
+    font-weight: bold;
+    cursor: pointer;
+    color: #000;
+    text-decoration: none;
+    display: inline-block;
+  }
+
+  .btn:active {
+    border-color: #808080 #fff #fff #808080;
+  }
+
+  .btn-google { background: #ffcccc; }
+  .btn-apple { background: #e6e6e6; }
+  .btn-amazon { background: #ffebcc; }
+
+  .layout {
+    display: flex;
+    gap: 10px;
+  }
+
+  .sidebar {
+    width: 240px;
+    background: #d4d0c8;
+    border: 2px solid #000;
+    padding: 8px;
+  }
+
+  .main-content {
+    flex: 1;
+    background: #fff;
+    border: 2px solid #000;
+    padding: 10px;
+  }
+
+  .box {
+    border: 2px solid #000;
+    background: #d4d0c8;
+    padding: 6px;
+    margin-bottom: 10px;
+  }
+
+  .box-title {
+    background: #808080;
+    color: #fff;
+    padding: 2px 5px;
+    font-weight: bold;
+    margin: -6px -6px 6px -6px;
+    border-bottom: 2px solid #000;
+  }
+
+  input[type="text"], select {
+    width: 100%;
+    border: 2px solid #000;
+    padding: 3px;
+    background: #fff;
+    margin-bottom: 6px;
+  }
+
+  .video-player-container {
+    background: #000;
+    border: 2px solid #000;
+    width: 100%;
+    height: 360px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  video {
+    width: 100%;
+    height: 100%;
+    background: #000;
+  }
+
+  .video-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
+  .video-card {
+    border: 2px solid #000;
+    background: #e0e0e0;
+    padding: 6px;
+    cursor: pointer;
+  }
+
+  .video-card:hover {
+    background: #ffffcc;
+  }
+
+  .video-thumb {
+    width: 100%;
+    height: 100px;
+    background: #808080;
+    border: 1px solid #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-family: 'VT323', monospace;
+    font-size: 18px;
+  }
+
+  .meta {
+    font-size: 11px;
+    color: #404040;
+    margin-top: 4px;
+  }
+
+  .status-bar {
+    background: #c0c0c0;
+    border: 2px solid #000;
+    padding: 3px 6px;
+    margin-top: 10px;
+    font-size: 11px;
+  }
+</style>
+
+<!-- AWS SDK v2 -->
+<script src="https://sdk.amazonaws.com/js/aws-sdk-2.1692.0.min.js"></script>
+<!-- Amazon Chime / Cognito Identity SDKs for Third-Party Auth -->
+<script src="https://amazon-cognito-assets.us-east-1.amazoncognito.com/amazon-cognito-identity.min.js"></script>
+</head>
+<body>
+
+<div id="container">
+  <header>
+    <div class="pixel-title">REALint</div>
+    <div class="auth-panel" id="auth-panel">
+      <span>LOGIN:</span>
+      <button class="btn btn-google" onclick="loginWithProvider('Google')">Google</button>
+      <button class="btn btn-apple" onclick="loginWithProvider('Apple')">Apple</button>
+      <button class="btn btn-amazon" onclick="loginWithProvider('LoginWithAmazon')">Amazon</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <div class="sidebar">
+      <div class="box">
+        <div class="box-title">USER STATUS</div>
+        <div id="user-info">NOT LOGGED IN</div>
+      </div>
+
+      <div class="box">
+        <div class="box-title">SEARCH & FILTER</div>
+        <label>Title:</label>
+        <input type="text" id="search-input" oninput="applyFilters()">
+        
+        <label>Category:</label>
+        <select id="category-select" onchange="applyFilters()">
+          <option value="ALL">ALL CATEGORIES</option>
+          <option value="Gaming">Gaming</option>
+          <option value="Tech">Tech</option>
+          <option value="Animation">Animation</option>
+          <option value="Music">Music</option>
+        </select>
+
+        <label>Sort By:</label>
+        <select id="sort-select" onchange="applyFilters()">
+          <option value="TRENDING">Trending (Likes/Time)</option>
+          <option value="NEWEST">Newest Uploads</option>
+        </select>
+      </div>
+
+      <div class="box">
+        <div class="box-title">UPLOAD TO AWS S3</div>
+        <label>Title:</label>
+        <input type="text" id="upload-title">
+        
+        <label>Category:</label>
+        <select id="upload-category">
+          <option value="Gaming">Gaming</option>
+          <option value="Tech">Tech</option>
+          <option value="Animation">Animation</option>
+          <option value="Music">Music</option>
+        </select>
+
+        <label>Video File (MP4/WebM):</label>
+        <input type="file" id="upload-file" accept="video/mp4,video/webm">
+        
+        <button class="btn" style="width:100%; margin-top:6px;" onclick="uploadToS3()">UPLOAD</button>
+      </div>
+    </div>
+
+    <div class="main-content">
+      <div class="box">
+        <div class="box-title" id="current-video-title">PLAYER</div>
+        <div class="video-player-container">
+          <video id="main-player" controls preload="metadata">
+            <source id="video-source" src="" type="video/mp4">
+            Your browser does not support HTML5 video.
+          </video>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <span id="player-category" class="btn" style="font-size:10px;">CAT: NONE</span>
+            <span id="player-author" style="margin-left:8px;">By: Anonymous</span>
+          </div>
+          <div>
+            <button class="btn" onclick="likeCurrentVideo()">LIKE (<span id="player-likes">0</span>)</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="box">
+        <div class="box-title">VIDEO INDEX</div>
+        <div class="video-grid" id="video-grid"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="status-bar" id="status-bar">STATUS: READY. CONNECTING TO AWS S3 / DYNAMODB...</div>
+</div>
+
+<script>
+  // AWS CONFIGURATION
+  const AWS_REGION = "us-east-1";
+  const S3_BUCKET_NAME = "realint-video-storage";
+  const DYNAMO_TABLE_NAME = "REALint_Videos";
+  const COGNITO_IDENTITY_POOL_ID = "us-east-1:00000000-0000-0000-0000-000000000000";
+  const COGNITO_DOMAIN = "realint-auth.auth.us-east-1.amazoncognito.com";
+  const CLIENT_ID = "00000000000000000000000000";
+
+  AWS.config.region = AWS_REGION;
+
+  let s3;
+  let dynamodb;
+  let currentUser = null;
+  let activeVideo = null;
+  let videoDatabase = [];
+
+  // INITIALIZATION
+  window.onload = function() {
+    initAWS();
+    checkAuthCallback();
+    loadVideosFromDynamo();
+  };
+
+  function initAWS() {
+    AWS.config.credentials = new AWS.CognitoIdentityCredentials({
+      IdentityPoolId: COGNITO_IDENTITY_POOL_ID
+    });
+
+    s3 = new AWS.S3({ apiVersion: '2006-03-01', params: { Bucket: S3_BUCKET_NAME } });
+    dynamodb = new AWS.DynamoDB.DocumentClient();
+  }
+
+  // OAUTH LOGIN (GOOGLE, APPLE, AMAZON VIA AWS COGNITO)
+  function loginWithProvider(provider) {
+    const redirectUri = encodeURIComponent(window.location.origin + window.location.pathname);
+    const authUrl = `https://${COGNITO_DOMAIN}/oauth2/authorize?response_type=token&client_id=${CLIENT_ID}&redirect_uri=${redirectUri}&identity_provider=${provider}`;
+    window.location.href = authUrl;
+  }
+
+  function checkAuthCallback() {
+    const hash = window.location.hash;
+    if (hash && hash.includes('id_token')) {
+      const params = new URLSearchParams(hash.substring(1));
+      const idToken = params.get('id_token');
+      
+      const payload = JSON.parse(atob(idToken.split('.')[1]));
+      currentUser = {
+        id: payload.sub,
+        email: payload.email || payload.username || 'User',
+        provider: payload['cognito:preferred_username'] || 'OAuth'
+      };
+
+      document.getElementById('user-info').innerText = `${currentUser.email.toUpperCase()}`;
+      document.getElementById('auth-panel').innerHTML = `<button class="btn" onclick="logout()">LOGOUT</button>`;
+
+      AWS.config.credentials = new AWS.CognitoIdentityCredentials({
+        IdentityPoolId: COGNITO_IDENTITY_POOL_ID,
+        Logins: {
+          [`cognito-idp.${AWS_REGION}.amazonaws.com/${COGNITO_DOMAIN}`]: idToken
+        }
+      });
+      
+      updateStatus("AUTHENTICATED WITH AWS COGNITO.");
+    }
+  }
+
+  function logout() {
+    currentUser = null;
+    window.location.href = window.location.origin + window.location.pathname;
+  }
+
+  // DYNAMODB DATA FETCHING
+  function loadVideosFromDynamo() {
+    updateStatus("FETCHING VIDEO INDEX FROM DYNAMODB...");
+    
+    const params = {
+      TableName: DYNAMO_TABLE_NAME
+    };
+
+    dynamodb.scan(params, function(err, data) {
+      if (err) {
+        updateStatus("DYNAMO READ ERROR. USING PUBLIC S3 SAMPLE DATA.");
+        loadFallbackS3Data();
+      } else {
+        videoDatabase = data.Items || [];
+        applyFilters();
+        updateStatus("INDEX LOADED FROM DYNAMODB.");
+      }
+    });
+  }
+
+  function loadFallbackS3Data() {
+    videoDatabase = [
+      {
+        id: "v1",
+        title: "Big Buck Bunny Sample",
+        category: "Animation",
+        video_url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+        mime_type: "video/mp4",
+        author: "OpenSource",
+        likes: 142,
+        timestamp: Date.now() - 36000000
+      },
+      {
+        id: "v2",
+        title: "Elephants Dream Tech Demo",
+        category: "Tech",
+        video_url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+        mime_type: "video/mp4",
+        author: "BlenderCorp",
+        likes: 89,
+        timestamp: Date.now() - 72000000
+      }
+    ];
+    applyFilters();
+  }
+
+  // AWS S3 DIRECT FILE UPLOAD
+  function uploadToS3() {
+    if (!currentUser) {
+      alert("MUST LOGIN WITH GOOGLE, APPLE, OR AMAZON TO UPLOAD.");
+      return;
+    }
+
+    const titleInput = document.getElementById('upload-title').value;
+    const categoryInput = document.getElementById('upload-category').value;
+    const fileInput = document.getElementById('upload-file');
+    const file = fileInput.files[0];
+
+    if (!titleInput || !file) {
+      alert("PROVIDE TITLE AND FILE.");
+      return;
+    }
+
+    const fileKey = `videos/${Date.now()}_${file.name}`;
+    const params = {
+      Key: fileKey,
+      Body: file,
+      ContentType: file.type,
+      ACL: 'public-read'
+    };
+
+    updateStatus("UPLOADING TO AWS S3 BUCKET...");
+
+    s3.upload(params, function(err, data) {
+      if (err) {
+        updateStatus("S3 UPLOAD ERROR: " + err.message);
+        alert("S3 Upload Failed: " + err.message);
+      } else {
+        const videoRecord = {
+          id: "vid_" + Date.now(),
+          title: titleInput,
+          category: categoryInput,
+          video_url: data.Location,
+          mime_type: file.type,
+          author: currentUser.email,
+          likes: 0,
+          timestamp: Date.now()
+        };
+
+        saveRecordToDynamo(videoRecord);
+      }
+    });
+  }
+
+  function saveRecordToDynamo(record) {
+    const params = {
+      TableName: DYNAMO_TABLE_NAME,
+      Item: record
+    };
+
+    dynamodb.put(params, function(err) {
+      if (err) {
+        updateStatus("DYNAMO SAVE ERROR: " + err.message);
+      } else {
+        updateStatus("SUCCESSFULLY PUBLISHED TO AWS.");
+        videoDatabase.unshift(record);
+        applyFilters();
+      }
+    });
+  }
+
+  // FILTERING AND SORTING (NO ALGORITHM)
+  function applyFilters() {
+    const searchVal = document.getElementById('search-input').value.toLowerCase();
+    const catVal = document.getElementById('category-select').value;
+    const sortVal = document.getElementById('sort-select').value;
+
+    let filtered = videoDatabase.filter(v => {
+      const matchSearch = v.title.toLowerCase().includes(searchVal);
+      const matchCat = (catVal === 'ALL') || (v.category === catVal);
+      return matchSearch && matchCat;
+    });
+
+    if (sortVal === 'TRENDING') {
+      filtered.sort((a, b) => {
+        const ageA = (Date.now() - a.timestamp) / 3600000 + 2;
+        const ageB = (Date.now() - b.timestamp) / 3600000 + 2;
+        const scoreA = a.likes / Math.pow(ageA, 1.5);
+        const scoreB = b.likes / Math.pow(ageB, 1.5);
+        return scoreB - scoreA;
+      });
+    } else if (sortVal === 'NEWEST') {
+      filtered.sort((a, b) => b.timestamp - a.timestamp);
+    }
+
+    renderGrid(filtered);
+    if (filtered.length > 0 && !activeVideo) {
+      loadVideoIntoPlayer(filtered[0]);
+    }
+  }
+
+  function renderGrid(videos) {
+    const grid = document.getElementById('video-grid');
+    grid.innerHTML = '';
+
+    videos.forEach(v => {
+      const card = document.createElement('div');
+      card.className = 'video-card';
+      card.onclick = () => loadVideoIntoPlayer(v);
+
+      card.innerHTML = `
+        <div class="video-thumb">${v.category.toUpperCase()}</div>
+        <div style="font-weight:bold; margin-top:4px;">${v.title}</div>
+        <div class="meta">By: ${v.author}</div>
+        <div class="meta">Likes: ${v.likes} | ${new Date(v.timestamp).toLocaleDateString()}</div>
+      `;
+      grid.appendChild(card);
+    });
+  }
+
+  // PLAYER SYSTEM (FIXES MIME/FORMAT ERRORS)
+  function loadVideoIntoPlayer(video) {
+    activeVideo = video;
+    document.getElementById('current-video-title').innerText = "PLAYER: " + video.title.toUpperCase();
+    document.getElementById('player-category').innerText = "CAT: " + video.category.toUpperCase();
+    document.getElementById('player-author').innerText = "By: " + video.author;
+    document.getElementById('player-likes').innerText = video.likes;
+
+    const player = document.getElementById('main-player');
+    const source = document.getElementById('video-source');
+
+    player.pause();
+    source.setAttribute('src', video.video_url);
+    if (video.mime_type) {
+      source.setAttribute('type', video.mime_type);
+    } else {
+      source.setAttribute('type', 'video/mp4');
+    }
+    
+    player.load();
+    updateStatus("LOADED VIDEO: " + video.title);
+  }
+
+  function likeCurrentVideo() {
+    if (!activeVideo) return;
+    if (!currentUser) {
+      alert("MUST BE LOGGED IN TO LIKE.");
+      return;
+    }
+
+    activeVideo.likes += 1;
+    document.getElementById('player-likes').innerText = activeVideo.likes;
+
+    const params = {
+      TableName: DYNAMO_TABLE_NAME,
+      Key: { id: activeVideo.id },
+      UpdateExpression: "set likes = likes + :val",
+      ExpressionAttributeValues: { ":val": 1 }
+    };
+
+    dynamodb.update(params, function(err) {
+      if (err) updateStatus("LIKE SYNC ERROR: " + err.message);
+      else {
+        updateStatus("LIKE REGISTERED ON AWS.");
+        applyFilters();
+      }
+    });
+  }
+
+  function updateStatus(msg) {
+    document.getElementById('status-bar').innerText = "STATUS: " + msg;
+  }
+</script>
+</body>
+</html>
