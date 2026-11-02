@@ -63,7 +63,7 @@
     border: 2px solid #000;
     padding: 6px;
     display: flex;
-    gap: 8px;
+    gap: 4px;
     align-items: center;
   }
 
@@ -83,9 +83,11 @@
     border-color: #808080 #fff #fff #808080;
   }
 
-  .btn-google { background: #ffcccc; }
-  .btn-apple { background: #e6e6e6; }
-  .btn-amazon { background: #ffebcc; }
+  .auth-input {
+    width: 110px !important;
+    margin-bottom: 0 !important;
+    padding: 2px !important;
+  }
 
   .layout {
     display: flex;
@@ -122,7 +124,7 @@
     border-bottom: 2px solid #000;
   }
 
-  input[type="text"], select {
+  input[type="text"], input[type="password"], select {
     width: 100%;
     border: 2px solid #000;
     padding: 3px;
@@ -148,7 +150,6 @@
     width: 100%;
     height: 100%;
     background: #000;
-    display: none;
   }
 
   .video-grid {
@@ -205,11 +206,6 @@
     font-size: 11px;
   }
 </style>
-
-<!-- AWS SDK v2 -->
-<script src="https://sdk.amazonaws.com/js/aws-sdk-2.1692.0.min.js"></script>
-<!-- Amazon Cognito Identity SDKs for Third-Party Auth -->
-<script src="https://amazon-cognito-assets.us-east-1.amazoncognito.com/amazon-cognito-identity.min.js"></script>
 </head>
 <body>
 
@@ -217,10 +213,10 @@
   <header>
     <div class="pixel-title">REALint</div>
     <div class="auth-panel" id="auth-panel">
-      <span>LOGIN:</span>
-      <button class="btn btn-google" onclick="loginWithProvider('Google')">Google</button>
-      <button class="btn btn-apple" onclick="loginWithProvider('Apple')">Apple</button>
-      <button class="btn btn-amazon" onclick="loginWithProvider('LoginWithAmazon')">Amazon</button>
+      <input type="text" id="login-email" class="auth-input" placeholder="EMAIL">
+      <input type="password" id="login-pass" class="auth-input" placeholder="PASS">
+      <button class="btn" onclick="accountAction('LOGIN')">LOGIN</button>
+      <button class="btn" onclick="accountAction('REGISTER')">REGISTER</button>
     </div>
   </header>
 
@@ -253,7 +249,7 @@
       </div>
 
       <div class="box">
-        <div class="box-title">UPLOAD TO AWS S3</div>
+        <div class="box-title">UPLOAD VIDEO</div>
         <label>Title:</label>
         <input type="text" id="upload-title">
         
@@ -268,7 +264,7 @@
         <label>Video File (MP4/WebM):</label>
         <input type="file" id="upload-file" accept="video/mp4,video/webm">
         
-        <button class="btn" style="width:100%; margin-top:6px;" onclick="uploadToS3()">UPLOAD</button>
+        <button class="btn" style="width:100%; margin-top:6px;" onclick="uploadVideo()">UPLOAD</button>
       </div>
     </div>
 
@@ -276,11 +272,7 @@
       <div class="box">
         <div class="box-title" id="current-video-title">PLAYER: NO MEDIA LOADED</div>
         <div class="video-player-container" id="player-container">
-          <span id="player-placeholder">NO VIDEO SELECTED</span>
-          <video id="main-player" controls preload="metadata">
-            <source id="video-source" src="" type="video/mp4">
-            Your browser does not support HTML5 video.
-          </video>
+          <span id="player-placeholder">NO VIDEOS FOUND</span>
         </div>
         <div style="display:flex; justify-content:space-between; align-items:center;">
           <div>
@@ -300,109 +292,86 @@
     </div>
   </div>
 
-  <div class="status-bar" id="status-bar">STATUS: READY. CONNECTING TO AWS S3 / DYNAMODB...</div>
+  <div class="status-bar" id="status-bar">STATUS: LOCAL DATABASE READY. NO AWS KEYS NEEDED.</div>
 </div>
 
 <script>
-  // AWS CONFIGURATION
-  const AWS_REGION = "us-east-1";
-  const S3_BUCKET_NAME = "realint-video-storage";
-  const DYNAMO_TABLE_NAME = "REALint_Videos";
-  const COGNITO_IDENTITY_POOL_ID = "us-east-1:00000000-0000-0000-0000-000000000000";
-  const COGNITO_DOMAIN = "realint-auth.auth.us-east-1.amazoncognito.com";
-  const CLIENT_ID = "00000000000000000000000000";
-
-  AWS.config.region = AWS_REGION;
-
-  let s3;
-  let dynamodb;
   let currentUser = null;
   let activeVideo = null;
   let videoDatabase = [];
+  let userDatabase = {};
 
-  // INITIALIZATION
   window.onload = function() {
-    initAWS();
-    checkAuthCallback();
-    loadVideosFromDynamo();
+    loadLocalAccounts();
+    loadLocalVideos();
   };
 
-  function initAWS() {
-    AWS.config.credentials = new AWS.CognitoIdentityCredentials({
-      IdentityPoolId: COGNITO_IDENTITY_POOL_ID
-    });
-
-    s3 = new AWS.S3({ apiVersion: '2006-03-01', params: { Bucket: S3_BUCKET_NAME } });
-    dynamodb = new AWS.DynamoDB.DocumentClient();
-  }
-
-  // OAUTH LOGIN (GOOGLE, APPLE, AMAZON VIA AWS COGNITO)
-  function loginWithProvider(provider) {
-    const redirectUri = encodeURIComponent(window.location.origin + window.location.pathname);
-    const authUrl = `https://${COGNITO_DOMAIN}/oauth2/authorize?response_type=token&client_id=${CLIENT_ID}&redirect_uri=${redirectUri}&identity_provider=${provider}`;
-    window.location.href = authUrl;
-  }
-
-  function checkAuthCallback() {
-    const hash = window.location.hash;
-    if (hash && hash.includes('id_token')) {
-      const params = new URLSearchParams(hash.substring(1));
-      const idToken = params.get('id_token');
-      
-      const payload = JSON.parse(atob(idToken.split('.')[1]));
-      currentUser = {
-        id: payload.sub,
-        email: payload.email || payload.username || 'User',
-        provider: payload['cognito:preferred_username'] || 'OAuth'
-      };
-
-      document.getElementById('user-info').innerText = `${currentUser.email.toUpperCase()}`;
-      document.getElementById('auth-panel').innerHTML = `<button class="btn" onclick="logout()">LOGOUT</button>`;
-
-      AWS.config.credentials = new AWS.CognitoIdentityCredentials({
-        IdentityPoolId: COGNITO_IDENTITY_POOL_ID,
-        Logins: {
-          [`cognito-idp.${AWS_REGION}.amazonaws.com/${COGNITO_DOMAIN}`]: idToken
-        }
-      });
-      
-      updateStatus("AUTHENTICATED WITH AWS COGNITO.");
+  function loadLocalAccounts() {
+    const savedUsers = localStorage.getItem('realint_users');
+    if (savedUsers) {
+      userDatabase = JSON.parse(savedUsers);
     }
+  }
+
+  function accountAction(type) {
+    const email = document.getElementById('login-email').value.trim().toLowerCase();
+    const pass = document.getElementById('login-pass').value.trim();
+
+    if (!email || !pass) {
+      alert("PROVIDE BOTH EMAIL AND PASSWORD.");
+      return;
+    }
+
+    if (type === 'REGISTER') {
+      if (userDatabase[email]) {
+        alert("ACCOUNT EXISTS. CLICK LOGIN.");
+        return;
+      }
+      userDatabase[email] = pass;
+      localStorage.setItem('realint_users', JSON.stringify(userDatabase));
+      currentUser = email;
+      updateUserUI();
+      updateStatus("REGISTERED & LOGGED IN AS " + email.toUpperCase());
+    } else if (type === 'LOGIN') {
+      if (!userDatabase[email] || userDatabase[email] !== pass) {
+        alert("INVALID EMAIL OR PASSWORD.");
+        return;
+      }
+      currentUser = email;
+      updateUserUI();
+      updateStatus("LOGGED IN AS " + email.toUpperCase());
+    }
+  }
+
+  function updateUserUI() {
+    document.getElementById('user-info').innerText = currentUser.toUpperCase();
+    document.getElementById('auth-panel').innerHTML = `<button class="btn" onclick="logout()">LOGOUT (${currentUser.toUpperCase()})</button>`;
   }
 
   function logout() {
     currentUser = null;
-    window.location.href = window.location.origin + window.location.pathname;
+    window.location.reload();
   }
 
-  // DYNAMODB DATA FETCHING
-  function loadVideosFromDynamo() {
-    updateStatus("FETCHING VIDEO INDEX FROM DYNAMODB...");
-    
-    const params = {
-      TableName: DYNAMO_TABLE_NAME
-    };
-
-    dynamodb.scan(params, function(err, data) {
-      if (err) {
-        updateStatus("DYNAMO SCAN complete: No records found or table uninitialized.");
-        videoDatabase = [];
-      } else {
-        videoDatabase = data.Items || [];
-        updateStatus("INDEX LOADED FROM DYNAMODB (" + videoDatabase.length + " VIDEOS).");
-      }
-      applyFilters();
-    });
+  function loadLocalVideos() {
+    const savedVids = localStorage.getItem('realint_videos');
+    if (savedVids) {
+      videoDatabase = JSON.parse(savedVids);
+      updateStatus("LOADED " + videoDatabase.length + " VIDEOS FROM STORAGE.");
+    } else {
+      videoDatabase = [];
+      updateStatus("NO VIDEOS IN STORAGE.");
+    }
+    applyFilters();
   }
 
-  // AWS S3 DIRECT FILE UPLOAD
-  function uploadToS3() {
+  function uploadVideo() {
     if (!currentUser) {
-      alert("MUST LOGIN WITH GOOGLE, APPLE, OR AMAZON TO UPLOAD.");
+      alert("MUST LOGIN OR REGISTER TO UPLOAD.");
       return;
     }
 
-    const titleInput = document.getElementById('upload-title').value;
+    const titleInput = document.getElementById('upload-title').value.trim();
     const categoryInput = document.getElementById('upload-category').value;
     const fileInput = document.getElementById('upload-file');
     const file = fileInput.files[0];
@@ -412,55 +381,37 @@
       return;
     }
 
-    const fileKey = `videos/${Date.now()}_${file.name}`;
-    const params = {
-      Key: fileKey,
-      Body: file,
-      ContentType: file.type,
-      ACL: 'public-read'
-    };
+    const reader = new FileReader();
+    updateStatus("PROCESSING VIDEO FILE...");
 
-    updateStatus("UPLOADING TO AWS S3 BUCKET...");
+    reader.onload = function(e) {
+      const videoRecord = {
+        id: "vid_" + Date.now(),
+        title: titleInput,
+        category: categoryInput,
+        video_url: e.target.result,
+        mime_type: file.type,
+        author: currentUser,
+        likes: 0,
+        liked_by: [],
+        timestamp: Date.now()
+      };
 
-    s3.upload(params, function(err, data) {
-      if (err) {
-        updateStatus("S3 UPLOAD ERROR: " + err.message);
-        alert("S3 Upload Failed: " + err.message);
-      } else {
-        const videoRecord = {
-          id: "vid_" + Date.now(),
-          title: titleInput,
-          category: categoryInput,
-          video_url: data.Location,
-          mime_type: file.type,
-          author: currentUser.email,
-          likes: 0,
-          timestamp: Date.now()
-        };
-
-        saveRecordToDynamo(videoRecord);
-      }
-    });
-  }
-
-  function saveRecordToDynamo(record) {
-    const params = {
-      TableName: DYNAMO_TABLE_NAME,
-      Item: record
-    };
-
-    dynamodb.put(params, function(err) {
-      if (err) {
-        updateStatus("DYNAMO SAVE ERROR: " + err.message);
-      } else {
-        updateStatus("SUCCESSFULLY PUBLISHED TO AWS.");
-        videoDatabase.unshift(record);
+      videoDatabase.unshift(videoRecord);
+      try {
+        localStorage.setItem('realint_videos', JSON.stringify(videoDatabase));
+        updateStatus("SUCCESSFULLY PUBLISHED VIDEO.");
         applyFilters();
+      } catch(err) {
+        alert("FILE TOO LARGE FOR LOCAL STORAGE. USE A SMALL MP4/WEBM FILE.");
+        updateStatus("STORAGE LIMIT EXCEEDED.");
+        videoDatabase.shift();
       }
-    });
+    };
+
+    reader.readAsDataURL(file);
   }
 
-  // FILTERING AND SORTING (NO ALGORITHM)
   function applyFilters() {
     const searchVal = document.getElementById('search-input').value.toLowerCase();
     const catVal = document.getElementById('category-select').value;
@@ -519,7 +470,6 @@
     });
   }
 
-  // PLAYER SYSTEM
   function loadVideoIntoPlayer(video) {
     activeVideo = video;
     document.getElementById('current-video-title').innerText = "PLAYER: " + video.title.toUpperCase();
@@ -527,22 +477,9 @@
     document.getElementById('player-author').innerText = "By: " + video.author;
     document.getElementById('player-likes').innerText = video.likes;
 
-    const player = document.getElementById('main-player');
-    const source = document.getElementById('video-source');
-    const placeholder = document.getElementById('player-placeholder');
+    const container = document.getElementById('player-container');
+    container.innerHTML = `<video id="main-player" controls preload="metadata"><source src="${video.video_url}" type="${video.mime_type || 'video/mp4'}">Your browser does not support HTML5 video.</video>`;
 
-    placeholder.style.display = 'none';
-    player.style.display = 'block';
-
-    player.pause();
-    source.setAttribute('src', video.video_url);
-    if (video.mime_type) {
-      source.setAttribute('type', video.mime_type);
-    } else {
-      source.setAttribute('type', 'video/mp4');
-    }
-    
-    player.load();
     updateStatus("LOADED VIDEO: " + video.title);
   }
 
@@ -553,13 +490,8 @@
     document.getElementById('player-author').innerText = "By: N/A";
     document.getElementById('player-likes').innerText = "0";
 
-    const player = document.getElementById('main-player');
-    const placeholder = document.getElementById('player-placeholder');
-
-    player.pause();
-    player.style.display = 'none';
-    placeholder.innerText = "NO VIDEOS FOUND";
-    placeholder.style.display = 'inline';
+    const container = document.getElementById('player-container');
+    container.innerHTML = `<span id="player-placeholder">NO VIDEOS FOUND</span>`;
   }
 
   function likeCurrentVideo() {
@@ -569,23 +501,20 @@
       return;
     }
 
+    if (!activeVideo.liked_by) activeVideo.liked_by = [];
+    
+    if (activeVideo.liked_by.includes(currentUser)) {
+      alert("YOU ALREADY LIKED THIS VIDEO.");
+      return;
+    }
+
     activeVideo.likes += 1;
+    activeVideo.liked_by.push(currentUser);
     document.getElementById('player-likes').innerText = activeVideo.likes;
 
-    const params = {
-      TableName: DYNAMO_TABLE_NAME,
-      Key: { id: activeVideo.id },
-      UpdateExpression: "set likes = likes + :val",
-      ExpressionAttributeValues: { ":val": 1 }
-    };
-
-    dynamodb.update(params, function(err) {
-      if (err) updateStatus("LIKE SYNC ERROR: " + err.message);
-      else {
-        updateStatus("LIKE REGISTERED ON AWS.");
-        applyFilters();
-      }
-    });
+    localStorage.setItem('realint_videos', JSON.stringify(videoDatabase));
+    updateStatus("LIKE REGISTERED FOR " + currentUser.toUpperCase());
+    applyFilters();
   }
 
   function updateStatus(msg) {
